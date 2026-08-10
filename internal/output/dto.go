@@ -72,6 +72,15 @@ type Tag struct {
 	Automatic bool   `json:"automatic"`
 }
 
+// Relation is one outgoing relation from a Zotero item. Target preserves the
+// complete URI; TargetKey is present when that URI identifies a Zotero item.
+type Relation struct {
+	ItemKey   string `json:"itemKey"`
+	Predicate string `json:"predicate"`
+	Target    string `json:"target"`
+	TargetKey string `json:"targetKey,omitempty"`
+}
+
 // Collection is one collection, with its parent's key when nested. It carries no
 // version, for the reasons given on Item.
 type Collection struct {
@@ -196,6 +205,24 @@ func NewItems(envelopes []zotero.Envelope) []Item {
 		items = append(items, NewItem(e))
 	}
 	return items
+}
+
+// NewRelations converts an item's outgoing relations to stable DTOs.
+func NewRelations(item zotero.Envelope) ([]Relation, error) {
+	edges, err := item.Relations()
+	if err != nil {
+		return nil, err
+	}
+	relations := make([]Relation, 0, len(edges))
+	for _, edge := range edges {
+		relations = append(relations, Relation{
+			ItemKey:   item.Key,
+			Predicate: edge.Predicate,
+			Target:    edge.Target,
+			TargetKey: edge.TargetKey,
+		})
+	}
+	return relations, nil
 }
 
 // NewCollection flattens a Zotero collection envelope.

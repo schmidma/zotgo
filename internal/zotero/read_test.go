@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -184,6 +185,34 @@ func TestResolveLibraryAmbiguousName(t *testing.T) {
 	_, err := New(srv.URL).ResolveLibrary(context.Background(), "Shared")
 	if !errors.Is(err, ErrAmbiguousLibrary) {
 		t.Fatalf("err = %v, want ErrAmbiguousLibrary", err)
+	}
+}
+
+func TestRawItemPreservesResponseShape(t *testing.T) {
+	const fixture = `{"key":"RAWITEM1","futureTop":{"kept":true},"data":{"itemType":"book","futureData":7}}`
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/users/0/items/RAWITEM1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Zotero-API-Version") != "3" {
+			t.Error("missing API version header")
+		}
+		_, _ = w.Write([]byte(fixture))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	raw, err := New(srv.URL).RawItem(context.Background(), UserLibrary(), "RAWITEM1")
+	if err != nil {
+		t.Fatalf("RawItem: %v", err)
+	}
+	var got, want any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("decode raw item: %v", err)
+	}
+	if err := json.Unmarshal([]byte(fixture), &want); err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("raw item changed shape: got %#v, want %#v", got, want)
 	}
 }
 

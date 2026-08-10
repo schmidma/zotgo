@@ -10,6 +10,11 @@ Planned and outstanding work is tracked in the
 
 ## [Unreleased]
 
+### Added
+
+- `zot relation list` shows an item's outgoing relation predicates and targets,
+  with stable JSON/JSONL output and Zotero-native `--raw` output.
+
 ## [0.6.0] - 2026-07-29
 
 Local writes, against Zotero's official local write API
