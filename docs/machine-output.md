@@ -23,11 +23,12 @@ for every command, so a script learns it once:
 }
 ```
 
-`kind` says what `data` holds: `items`, `item`, `collections`, `collection`,
-`stats`, `health`, or `item-mutations`. A `health` document carries `endpoint`
-and `capabilities`, so a script can check for `write` support rather than assume
-it. `schema` is bumped only when a field changes meaning or disappears — new
-fields may appear at any time, so ignore the ones you don't know.
+`kind` says what `data` holds: `items`, `item`, `relations`, `relation`,
+`collections`, `collection`, `stats`, `health`, or `item-mutations`. A `health`
+document carries `endpoint` and `capabilities`, so a script can check for `write`
+support rather than assume it. `schema` is bumped only when a field changes
+meaning or disappears — new fields may appear at any time, so ignore the ones
+you don't know.
 
 ### Item writes
 
@@ -54,6 +55,13 @@ without syncing, and the local write API replaces it with an unrelated local
 counter. Sending one to the Web API as a write precondition is a data-integrity
 hazard. If you need Zotero's number anyway, take it from `--raw`, which is
 explicitly outside this contract.
+
+### Relations
+
+`zot --json relation list ITEM_KEY` emits an ordered `relations` array. Each
+record carries the source `itemKey`, Zotero predicate, and complete target URI;
+`targetKey` is present when the URI identifies another Zotero item. JSONL uses
+the singular `relation` kind for each self-describing record.
 
 ## `--jsonl`
 

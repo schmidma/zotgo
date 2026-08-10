@@ -14,6 +14,8 @@ Planned and outstanding work is tracked in the
 
 - Stable JSON/JSONL mutation records for item create, patch, and delete,
   including dry runs and ordered partial outcomes.
+- `zot relation list` shows an item's outgoing relation predicates and targets,
+  with stable JSON/JSONL output and Zotero-native `--raw` output.
 
 ## [0.6.0] - 2026-07-29
 

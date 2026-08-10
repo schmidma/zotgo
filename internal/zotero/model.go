@@ -1,8 +1,13 @@
 package zotero
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 )
 
 // versionNumber accepts the empty version emitted for untouched objects
@@ -89,6 +94,13 @@ func (d *ItemData) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Relation is one predicate/target edge from an item.
+type Relation struct {
+	Predicate string
+	Target    string
+	TargetKey string
+}
+
 type Creator struct {
 	CreatorType string `json:"creatorType"`
 	FirstName   string `json:"firstName"`
@@ -126,6 +138,85 @@ func (e Envelope) CollectionData() (CollectionData, error) {
 	}
 	err := json.Unmarshal(e.Data, &data)
 	return data, err
+}
+
+// Relations returns an item's relation edges in stable predicate/target order.
+func (e Envelope) Relations() ([]Relation, error) {
+	if len(e.Data) == 0 {
+		return []Relation{}, nil
+	}
+	var data struct {
+		Relations map[string]json.RawMessage `json:"relations"`
+	}
+	if err := json.Unmarshal(e.Data, &data); err != nil {
+		return nil, err
+	}
+	relations := make([]Relation, 0)
+	for predicate, rawTargets := range data.Relations {
+		targets, err := relationTargets(rawTargets)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", predicate, err)
+		}
+		for _, target := range targets {
+			relations = append(relations, Relation{
+				Predicate: predicate,
+				Target:    target,
+				TargetKey: relationTargetKey(target),
+			})
+		}
+	}
+	sort.Slice(relations, func(i, j int) bool {
+		if relations[i].Predicate == relations[j].Predicate {
+			return relations[i].Target < relations[j].Target
+		}
+		return relations[i].Predicate < relations[j].Predicate
+	})
+	return relations, nil
+}
+
+// relationTargets accepts both relation shapes Zotero has exposed: current
+// reads return an array, while the API's write examples use a single string.
+func relationTargets(raw json.RawMessage) ([]string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("empty relation target")
+	}
+	switch trimmed[0] {
+	case '"':
+		var target string
+		if err := json.Unmarshal(trimmed, &target); err != nil {
+			return nil, err
+		}
+		return []string{target}, nil
+	case '[':
+		var targets []string
+		if err := json.Unmarshal(trimmed, &targets); err != nil {
+			return nil, err
+		}
+		return targets, nil
+	default:
+		return nil, fmt.Errorf("relation target must be a string or array of strings")
+	}
+}
+
+func relationTargetKey(target string) string {
+	u, err := url.Parse(target)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "zotero.org" && host != "www.zotero.org" {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.EscapedPath(), "/"), "/")
+	if len(parts) != 4 || (parts[0] != "users" && parts[0] != "groups") || parts[2] != "items" {
+		return ""
+	}
+	key, err := url.PathUnescape(parts[3])
+	if err != nil {
+		return ""
+	}
+	return key
 }
 
 // Title is a convenience accessor for item titles and collection names.

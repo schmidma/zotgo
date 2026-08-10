@@ -10,6 +10,8 @@ package zotero
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"os"
 	"testing"
 )
@@ -73,6 +75,74 @@ func TestLiveGroupResolutionAndReads(t *testing.T) {
 		}
 	}
 	t.Logf("group %q (id %d): %d items total", g.Data.Name, g.ID, page.TotalResults)
+}
+
+func TestLiveRelationsMatchRawItemData(t *testing.T) {
+	c := liveClient(t)
+	response, err := c.get(context.Background(), "/api/users/0/items?limit=100")
+	if err != nil {
+		t.Fatalf("GET items: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("GET items: %s", response.Status)
+	}
+	var items []struct {
+		Key  string          `json:"key"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&items); err != nil {
+		t.Fatalf("decode items: %v", err)
+	}
+	for _, rawItem := range items {
+		var raw struct {
+			Relations map[string]any `json:"relations"`
+		}
+		if err := json.Unmarshal(rawItem.Data, &raw); err != nil {
+			t.Fatalf("decode item %s: %v", rawItem.Key, err)
+		}
+		if len(raw.Relations) == 0 {
+			continue
+		}
+		expected := make(map[string]int)
+		var expectedCount int
+		for predicate, value := range raw.Relations {
+			switch targets := value.(type) {
+			case string:
+				expected[predicate+"\x00"+targets]++
+				expectedCount++
+			case []any:
+				for _, target := range targets {
+					target, ok := target.(string)
+					if !ok {
+						t.Fatalf("raw relation %s on %s has non-string target", predicate, rawItem.Key)
+					}
+					expected[predicate+"\x00"+target]++
+					expectedCount++
+				}
+			default:
+				t.Fatalf("raw relation %s on %s has shape %T", predicate, rawItem.Key, value)
+			}
+		}
+		relations, err := (Envelope{Key: rawItem.Key, Data: rawItem.Data}).Relations()
+		if err != nil {
+			t.Fatalf("Relations(%s): %v", rawItem.Key, err)
+		}
+		if len(relations) != expectedCount {
+			t.Fatalf("Relations(%s) returned %d edges, raw data has %d", rawItem.Key, len(relations), expectedCount)
+		}
+		for _, relation := range relations {
+			key := relation.Predicate + "\x00" + relation.Target
+			if expected[key] == 0 {
+				t.Errorf("Relations(%s) invented edge %s -> %s", rawItem.Key, relation.Predicate, relation.Target)
+				continue
+			}
+			expected[key]--
+		}
+		t.Logf("item %s: checked %d relation edges", rawItem.Key, len(relations))
+		return
+	}
+	t.Skip("no item relations among first 100 items")
 }
 
 func TestLiveNotFound(t *testing.T) {

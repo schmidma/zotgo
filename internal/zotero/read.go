@@ -117,6 +117,15 @@ func (c *Client) Item(ctx context.Context, library LibraryRef, key string) (Enve
 	return item, err
 }
 
+// RawItem reads one item without decoding its Zotero-owned response shape.
+func (c *Client) RawItem(ctx context.Context, library LibraryRef, key string) (json.RawMessage, error) {
+	body, _, err := c.do(ctx, c.profile.LibraryPrefix(library)+"/items/"+url.PathEscape(key), nil)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(body), nil
+}
+
 // Collection reads one collection by key.
 func (c *Client) Collection(ctx context.Context, library LibraryRef, key string) (Envelope, error) {
 	var col Envelope
