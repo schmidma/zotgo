@@ -2,6 +2,8 @@ package zotero
 
 import (
 	"encoding/json"
+	"fmt"
+	"sort"
 	"strconv"
 )
 
@@ -46,6 +48,25 @@ type ItemData struct {
 	Collections []string  `json:"collections"`
 }
 
+// Note is the note metadata and rich HTML returned by Zotero.
+type Note struct {
+	Key          string
+	ParentKey    string
+	DateAdded    string
+	DateModified string
+	Tags         []Tag
+	HTML         string
+}
+
+type noteData struct {
+	ItemType     string          `json:"itemType"`
+	ParentItem   json.RawMessage `json:"parentItem"`
+	DateAdded    string          `json:"dateAdded"`
+	DateModified string          `json:"dateModified"`
+	Tags         []Tag           `json:"tags"`
+	Note         string          `json:"note"`
+}
+
 type Creator struct {
 	CreatorType string `json:"creatorType"`
 	FirstName   string `json:"firstName"`
@@ -73,6 +94,69 @@ func (e Envelope) ItemData() (ItemData, error) {
 	}
 	err := json.Unmarshal(e.Data, &data)
 	return data, err
+}
+
+// Note decodes and validates one Zotero note item.
+func (e Envelope) Note() (Note, error) {
+	if e.Key == "" {
+		return Note{}, fmt.Errorf("missing note key")
+	}
+	if len(e.Data) == 0 {
+		return Note{}, fmt.Errorf("note %s has no data", e.Key)
+	}
+	var data noteData
+	if err := json.Unmarshal(e.Data, &data); err != nil {
+		return Note{}, fmt.Errorf("note %s: %w", e.Key, err)
+	}
+	if data.ItemType != "note" {
+		return Note{}, fmt.Errorf("item %s has type %q, not note", e.Key, data.ItemType)
+	}
+	parentKey, err := noteParentKey(data.ParentItem)
+	if err != nil {
+		return Note{}, fmt.Errorf("note %s parentItem: %w", e.Key, err)
+	}
+	tags := data.Tags
+	if tags == nil {
+		tags = []Tag{}
+	}
+	return Note{
+		Key:          e.Key,
+		ParentKey:    parentKey,
+		DateAdded:    data.DateAdded,
+		DateModified: data.DateModified,
+		Tags:         tags,
+		HTML:         data.Note,
+	}, nil
+}
+
+// Notes decodes note envelopes in modified-descending, key-stable order.
+func Notes(envelopes []Envelope) ([]Note, error) {
+	notes := make([]Note, 0, len(envelopes))
+	for _, envelope := range envelopes {
+		note, err := envelope.Note()
+		if err != nil {
+			return nil, err
+		}
+		notes = append(notes, note)
+	}
+	sort.Slice(notes, func(i, j int) bool {
+		if notes[i].DateModified == notes[j].DateModified {
+			return notes[i].Key < notes[j].Key
+		}
+		return notes[i].DateModified > notes[j].DateModified
+	})
+	return notes, nil
+}
+
+func noteParentKey(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 || string(raw) == "null" || string(raw) == "false" {
+		return "", nil
+	}
+	var key string
+	if err := json.Unmarshal(raw, &key); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 // CollectionData decodes e.Data as Zotero collection JSON.

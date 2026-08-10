@@ -49,6 +49,13 @@ type CollectionsOptions struct {
 	Start int
 }
 
+// ChildrenOptions controls child-item requests.
+type ChildrenOptions struct {
+	ItemType string
+	Start    int
+	Limit    int
+}
+
 // Items reads a single page of items.
 func (c *Client) Items(ctx context.Context, library LibraryRef, opts ItemsOptions) ([]Envelope, Page, error) {
 	var items []Envelope
@@ -117,6 +124,15 @@ func (c *Client) Item(ctx context.Context, library LibraryRef, key string) (Enve
 	return item, err
 }
 
+// RawItem reads one item without decoding its Zotero-owned response shape.
+func (c *Client) RawItem(ctx context.Context, library LibraryRef, key string) (json.RawMessage, error) {
+	body, _, err := c.do(ctx, c.profile.LibraryPrefix(library)+"/items/"+url.PathEscape(key), nil)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(body), nil
+}
+
 // Collection reads one collection by key.
 func (c *Client) Collection(ctx context.Context, library LibraryRef, key string) (Envelope, error) {
 	var col Envelope
@@ -127,8 +143,60 @@ func (c *Client) Collection(ctx context.Context, library LibraryRef, key string)
 // ItemChildren reads attachments and notes under a parent item.
 func (c *Client) ItemChildren(ctx context.Context, library LibraryRef, key string) ([]Envelope, Page, error) {
 	var children []Envelope
-	page, err := c.getJSON(ctx, c.profile.LibraryPrefix(library)+"/items/"+url.PathEscape(key)+"/children", nil, &children)
+	page, err := c.getJSON(ctx, childItemsPath(c.profile, library, key), nil, &children)
 	return children, page, err
+}
+
+// AllRawChildItems follows pagination while preserving each Zotero item envelope.
+func (c *Client) AllRawChildItems(ctx context.Context, library LibraryRef, key string, opts ChildrenOptions) ([]json.RawMessage, error) {
+	all := make([]json.RawMessage, 0)
+	for {
+		body, page, err := c.do(ctx, childItemsPath(c.profile, library, key), childrenValues(opts))
+		if err != nil {
+			return nil, err
+		}
+		trimmed := strings.TrimSpace(string(body))
+		if trimmed == "" {
+			return nil, errors.New("decode child items: empty response body")
+		}
+		if trimmed[0] != '[' {
+			return nil, errors.New("decode child items: expected a JSON array")
+		}
+		children := make([]json.RawMessage, 0)
+		if err := json.Unmarshal([]byte(trimmed), &children); err != nil {
+			return nil, err
+		}
+		all = append(all, children...)
+		start, more, err := nextStart(page.NextURL, opts.Start)
+		if err != nil {
+			return nil, err
+		}
+		if !more {
+			return all, nil
+		}
+		if err := c.honorBackoff(ctx, page); err != nil {
+			return nil, err
+		}
+		opts.Start = start
+	}
+}
+
+func childItemsPath(profile Profile, library LibraryRef, key string) string {
+	return profile.LibraryPrefix(library) + "/items/" + url.PathEscape(key) + "/children"
+}
+
+func childrenValues(opts ChildrenOptions) url.Values {
+	v := make(url.Values)
+	if opts.ItemType != "" {
+		v.Set("itemType", opts.ItemType)
+	}
+	if opts.Start > 0 {
+		v.Set("start", strconv.Itoa(opts.Start))
+	}
+	if opts.Limit > 0 {
+		v.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	return v
 }
 
 // Collections reads a single page of collections.

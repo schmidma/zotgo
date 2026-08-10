@@ -10,12 +10,26 @@ zot list --tag ml --tag review # items with all the given tags
 zot search "state estimation"  # search by title/creator/year
 zot search algae --everything  # include full text and notes
 zot show HRAC4E44              # one item with its attachments and notes
+zot note list HRAC4E44         # body-free child-note metadata
+zot note get ABCD1234          # one explicitly requested note with HTML
 zot collections               # collections as a tree (--flat for a list)
 zot stats                     # library-wide counts
 ```
 
 Global flags: `--library`/`-L` selects a group library (by name or id; default is
 My Library), and `--url` overrides the endpoint address.
+
+## Notes
+
+`zot note list ITEM_KEY` reads direct child notes in modified-descending order.
+Its human and stable machine output contain keys, dates, tags, and a content
+presence flag, but never note bodies. Zotero exposes no separate canonical note
+title or summary, so the list does not invent one from the HTML.
+
+`zot note get NOTE_KEY` explicitly retrieves one note. Human output prints its
+rich-note HTML; stable JSON/JSONL includes the same exact HTML in `html`. `--raw`
+returns the complete Zotero item envelope instead. A standalone note can be read
+with `get`, while `list` expects a bibliographic parent item.
 
 ## Export
 
