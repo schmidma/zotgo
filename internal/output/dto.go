@@ -114,6 +114,18 @@ type Annotation struct {
 	HasComment    bool   `json:"hasComment"`
 }
 
+// Note is one Zotero note. List output omits HTML while get output includes it,
+// including an explicitly empty string for an empty note.
+type Note struct {
+	Key          string  `json:"key"`
+	ParentKey    string  `json:"parentKey"`
+	DateAdded    string  `json:"dateAdded"`
+	DateModified string  `json:"dateModified"`
+	Tags         []Tag   `json:"tags"`
+	HasContent   bool    `json:"hasContent"`
+	HTML         *string `json:"html,omitempty"`
+}
+
 // Collection is one collection, with its parent's key when nested. It carries no
 // version, for the reasons given on Item.
 type Collection struct {
@@ -272,6 +284,36 @@ func NewAnnotations(annotations []zotero.Annotation) []Annotation {
 			HasText:       annotation.HasText,
 			HasComment:    annotation.HasComment,
 		})
+	}
+	return records
+}
+
+// NewNote converts a note to its stable DTO. includeHTML distinguishes an
+// explicit get from a compact list, including when the fetched note is empty.
+func NewNote(note zotero.Note, includeHTML bool) Note {
+	tags := make([]Tag, 0, len(note.Tags))
+	for _, tag := range note.Tags {
+		tags = append(tags, Tag{Name: tag.Tag, Automatic: tag.Type == automaticTagType})
+	}
+	record := Note{
+		Key:          note.Key,
+		ParentKey:    note.ParentKey,
+		DateAdded:    note.DateAdded,
+		DateModified: note.DateModified,
+		Tags:         tags,
+		HasContent:   note.HTML != "",
+	}
+	if includeHTML {
+		record.HTML = &note.HTML
+	}
+	return record
+}
+
+// NewNotes converts compact note summaries without their HTML bodies.
+func NewNotes(notes []zotero.Note) []Note {
+	records := make([]Note, 0, len(notes))
+	for _, note := range notes {
+		records = append(records, NewNote(note, false))
 	}
 	return records
 }

@@ -53,6 +53,51 @@ func Annotations(w io.Writer, attachmentKey string, annotations []zotero.Annotat
 	fmt.Fprintf(w, "\n%d annotations\n", len(annotations))
 }
 
+// Notes writes compact note metadata without note bodies.
+func Notes(w io.Writer, parentKey string, notes []zotero.Note) {
+	if len(notes) == 0 {
+		fmt.Fprintf(w, "No notes for item %s.\n", parentKey)
+		return
+	}
+	tw := newTable(w)
+	fmt.Fprintln(tw, "KEY\tMODIFIED\tCONTENT\tTAGS")
+	for _, note := range notes {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\n",
+			note.Key,
+			note.DateModified,
+			yesNo(note.HTML != ""),
+			len(note.Tags),
+		)
+	}
+	tw.Flush()
+	fmt.Fprintf(w, "\n%d notes\n", len(notes))
+}
+
+// Note writes one explicitly requested note, including Zotero's rich HTML.
+func Note(w io.Writer, note zotero.Note) {
+	tw := newTable(w)
+	field(tw, "Key", note.Key)
+	if note.ParentKey != "" {
+		field(tw, "Parent", note.ParentKey)
+	}
+	field(tw, "Added", note.DateAdded)
+	field(tw, "Modified", note.DateModified)
+	if tags := tagNames(note.Tags); tags != "" {
+		field(tw, "Tags", tags)
+	}
+	tw.Flush()
+
+	fmt.Fprintln(w, "\nHTML:")
+	if note.HTML == "" {
+		fmt.Fprintln(w, "(empty)")
+		return
+	}
+	fmt.Fprint(w, note.HTML)
+	if !strings.HasSuffix(note.HTML, "\n") {
+		fmt.Fprintln(w)
+	}
+}
+
 // Item writes a detailed view of a single item and its children.
 func Item(w io.Writer, item zotero.Envelope, children []zotero.Envelope) {
 	data, _ := item.ItemData()
@@ -199,7 +244,6 @@ func tagNames(tags []zotero.Tag) string {
 	return strings.Join(parts, ", ")
 }
 
-// truncate shortens s to at most n runes, appending an ellipsis when cut.
 func yesNo(value bool) string {
 	if value {
 		return "yes"
@@ -207,6 +251,7 @@ func yesNo(value bool) string {
 	return "no"
 }
 
+// truncate shortens s to at most n runes, appending an ellipsis when cut.
 func truncate(s string, n int) string {
 	r := []rune(s)
 	if len(r) <= n {

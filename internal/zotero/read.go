@@ -183,11 +183,16 @@ func (c *Client) AllRawChildItems(ctx context.Context, library LibraryRef, key s
 		if err != nil {
 			return nil, err
 		}
+		trimmed := strings.TrimSpace(string(body))
+		if trimmed == "" {
+			return nil, errors.New("decode child items: empty response body")
+		}
+		if trimmed[0] != '[' {
+			return nil, errors.New("decode child items: expected a JSON array")
+		}
 		children := make([]json.RawMessage, 0)
-		if len(body) != 0 {
-			if err := json.Unmarshal(body, &children); err != nil {
-				return nil, err
-			}
+		if err := json.Unmarshal([]byte(trimmed), &children); err != nil {
+			return nil, err
 		}
 		all = append(all, children...)
 		start, more, err := nextStart(page.NextURL, opts.Start)

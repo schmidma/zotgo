@@ -24,11 +24,11 @@ for every command, so a script learns it once:
 ```
 
 `kind` says what `data` holds: `items`, `item`, `relations`, `relation`,
-`annotations`, `annotation`, `collections`, `collection`, `stats`, `health`, or
-`item-mutations`. A `health` document carries `endpoint` and `capabilities`, so a
-script can check for `write` support rather than assume it. `schema` is bumped
-only when a field changes meaning or disappears — new fields may appear at any
-time, so ignore the ones you don't know.
+`annotations`, `annotation`, `notes`, `note`, `collections`, `collection`,
+`stats`, `health`, or `item-mutations`. A `health` document carries `endpoint`
+and `capabilities`, so a script can check for `write` support rather than assume
+it. `schema` is bumped only when a field changes meaning or disappears — new
+fields may appear at any time, so ignore the ones you don't know.
 
 ### Item writes
 
@@ -58,11 +58,27 @@ the singular `annotation` kind for each self-describing record.
 envelopes into one array. Envelope fields are not reshaped, but both their shape
 and server order remain outside the stable contract.
 
+### Notes
+
+`zot --json note list ITEM_KEY` emits a modified-descending `notes` array. Each
+record carries its key, parent key, added/modified dates, tags, and `hasContent`.
+The `html` field is absent, so listing notes cannot leak their bodies.
+
+`zot --json note get NOTE_KEY` emits one `note` record with the same fields and
+an additional `html` field containing Zotero's exact rich-note HTML. `html` is
+present even for an empty note. JSONL uses the singular `note` kind for both
+forms.
+
+For `note list`, `--raw` fetches all pages and joins their complete Zotero item
+envelopes into one array without reshaping fields. For `note get`, it emits the
+single complete envelope. Raw shape and server order remain outside the stable
+contract.
+
 ### No `version` field
 
-Items, collections, and stable annotation records carry **no `version`**. A
-Zotero object version belongs to the endpoint that issued it, and the Local API's
-has no meaning zotgo can promise:
+Items, collections, stable annotation records, and stable note records carry
+**no `version`**. A Zotero object version belongs to the endpoint that issued it,
+and the Local API's has no meaning zotgo can promise:
 it is the *server* version, so it does not move when you edit an item locally
 without syncing, and the local write API replaces it with an unrelated local
 counter. Sending one to the Web API as a write precondition is a data-integrity

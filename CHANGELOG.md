@@ -18,6 +18,8 @@ Planned and outstanding work is tracked in the
   with stable JSON/JSONL output and Zotero-native `--raw` output.
 - `zot annotation list` shows compact annotation metadata in document order,
   with stable JSON/JSONL output and complete Zotero envelopes under `--raw`.
+- `zot note list` shows body-free child-note metadata, and `zot note get`
+  retrieves one explicitly requested note with its rich HTML.
 
 ## [0.6.0] - 2026-07-29
 
