@@ -24,6 +24,8 @@ const (
 	KindItems         Kind = "items"
 	KindRelation      Kind = "relation"
 	KindRelations     Kind = "relations"
+	KindAnnotation    Kind = "annotation"
+	KindAnnotations   Kind = "annotations"
 	KindCollection    Kind = "collection"
 	KindCollections   Kind = "collections"
 	KindStats         Kind = "stats"

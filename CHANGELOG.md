@@ -16,6 +16,8 @@ Planned and outstanding work is tracked in the
   including dry runs and ordered partial outcomes.
 - `zot relation list` shows an item's outgoing relation predicates and targets,
   with stable JSON/JSONL output and Zotero-native `--raw` output.
+- `zot annotation list` shows compact annotation metadata in document order,
+  with stable JSON/JSONL output and complete Zotero envelopes under `--raw`.
 
 ## [0.6.0] - 2026-07-29
 

@@ -101,6 +101,29 @@ type Relation struct {
 	TargetKey string
 }
 
+// Annotation is the compact annotation metadata used by list output.
+type Annotation struct {
+	Key           string
+	AttachmentKey string
+	Type          string
+	PageLabel     string
+	Color         string
+	SortIndex     string
+	HasText       bool
+	HasComment    bool
+}
+
+type annotationData struct {
+	ItemType            string `json:"itemType"`
+	ParentItem          string `json:"parentItem"`
+	AnnotationType      string `json:"annotationType"`
+	AnnotationText      string `json:"annotationText"`
+	AnnotationComment   string `json:"annotationComment"`
+	AnnotationColor     string `json:"annotationColor"`
+	AnnotationPageLabel string `json:"annotationPageLabel"`
+	AnnotationSortIndex string `json:"annotationSortIndex"`
+}
+
 type Creator struct {
 	CreatorType string `json:"creatorType"`
 	FirstName   string `json:"firstName"`
@@ -128,6 +151,67 @@ func (e Envelope) ItemData() (ItemData, error) {
 	}
 	err := json.Unmarshal(e.Data, &data)
 	return data, err
+}
+
+// Annotation decodes and validates the compact metadata for an annotation item.
+func (e Envelope) Annotation() (Annotation, error) {
+	if e.Key == "" {
+		return Annotation{}, fmt.Errorf("missing annotation key")
+	}
+	if len(e.Data) == 0 {
+		return Annotation{}, fmt.Errorf("annotation %s has no data", e.Key)
+	}
+	var data annotationData
+	if err := json.Unmarshal(e.Data, &data); err != nil {
+		return Annotation{}, fmt.Errorf("annotation %s: %w", e.Key, err)
+	}
+	if data.ItemType != "annotation" {
+		return Annotation{}, fmt.Errorf("item %s has type %q, not annotation", e.Key, data.ItemType)
+	}
+	if data.ParentItem == "" {
+		return Annotation{}, fmt.Errorf("annotation %s has no parent attachment", e.Key)
+	}
+	if data.AnnotationType == "" {
+		return Annotation{}, fmt.Errorf("annotation %s has no annotation type", e.Key)
+	}
+	return Annotation{
+		Key:           e.Key,
+		AttachmentKey: data.ParentItem,
+		Type:          data.AnnotationType,
+		PageLabel:     data.AnnotationPageLabel,
+		Color:         data.AnnotationColor,
+		SortIndex:     data.AnnotationSortIndex,
+		HasText:       data.AnnotationText != "",
+		HasComment:    data.AnnotationComment != "",
+	}, nil
+}
+
+// Annotations decodes annotation envelopes in document order.
+func Annotations(envelopes []Envelope) ([]Annotation, error) {
+	annotations := make([]Annotation, 0, len(envelopes))
+	for _, envelope := range envelopes {
+		annotation, err := envelope.Annotation()
+		if err != nil {
+			return nil, err
+		}
+		annotations = append(annotations, annotation)
+	}
+	sort.Slice(annotations, func(i, j int) bool {
+		left, right := annotations[i], annotations[j]
+		if left.SortIndex == "" || right.SortIndex == "" {
+			if left.SortIndex == "" && right.SortIndex != "" {
+				return false
+			}
+			if left.SortIndex != "" && right.SortIndex == "" {
+				return true
+			}
+		}
+		if left.SortIndex == right.SortIndex {
+			return left.Key < right.Key
+		}
+		return left.SortIndex < right.SortIndex
+	})
+	return annotations, nil
 }
 
 // CollectionData decodes e.Data as Zotero collection JSON.
