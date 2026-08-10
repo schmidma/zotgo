@@ -72,6 +72,19 @@ type Tag struct {
 	Automatic bool   `json:"automatic"`
 }
 
+// Annotation is one compact annotation summary. Text, comments, and PDF
+// position geometry remain available only through --raw.
+type Annotation struct {
+	Key           string `json:"key"`
+	AttachmentKey string `json:"attachmentKey"`
+	Type          string `json:"type"`
+	PageLabel     string `json:"pageLabel"`
+	Color         string `json:"color"`
+	SortIndex     string `json:"sortIndex"`
+	HasText       bool   `json:"hasText"`
+	HasComment    bool   `json:"hasComment"`
+}
+
 // Collection is one collection, with its parent's key when nested. It carries no
 // version, for the reasons given on Item.
 type Collection struct {
@@ -196,6 +209,24 @@ func NewItems(envelopes []zotero.Envelope) []Item {
 		items = append(items, NewItem(e))
 	}
 	return items
+}
+
+// NewAnnotations converts compact annotation metadata to stable DTOs.
+func NewAnnotations(annotations []zotero.Annotation) []Annotation {
+	records := make([]Annotation, 0, len(annotations))
+	for _, annotation := range annotations {
+		records = append(records, Annotation{
+			Key:           annotation.Key,
+			AttachmentKey: annotation.AttachmentKey,
+			Type:          annotation.Type,
+			PageLabel:     annotation.PageLabel,
+			Color:         annotation.Color,
+			SortIndex:     annotation.SortIndex,
+			HasText:       annotation.HasText,
+			HasComment:    annotation.HasComment,
+		})
+	}
+	return records
 }
 
 // NewCollection flattens a Zotero collection envelope.

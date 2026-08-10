@@ -10,12 +10,26 @@ zot list --tag ml --tag review # items with all the given tags
 zot search "state estimation"  # search by title/creator/year
 zot search algae --everything  # include full text and notes
 zot show HRAC4E44              # one item with its attachments and notes
+zot annotation list ABCD1234   # compact annotations under one attachment
 zot collections               # collections as a tree (--flat for a list)
 zot stats                     # library-wide counts
 ```
 
 Global flags: `--library`/`-L` selects a group library (by name or id; default is
 My Library), and `--url` overrides the endpoint address.
+
+## Annotations
+
+`zot annotation list ATTACHMENT_KEY` reads the direct annotations under one
+attachment and orders them by Zotero's document sort index. Human and stable
+machine output show the annotation key, type, page label, color, sort index, and
+whether text or a comment is present. They deliberately omit annotation text,
+comment bodies, and document position data; use `--raw` when those Zotero-owned
+fields are essential.
+
+The command accepts an attachment key, not the key of its parent bibliographic
+item. Its count appears in the human footer and JSON `meta`, so a separate count
+request is unnecessary.
 
 ## Export
 

@@ -23,15 +23,28 @@ for every command, so a script learns it once:
 }
 ```
 
-`kind` says what `data` holds: `items`, `item`, `collections`, `collection`,
-`stats`, or `health`. A `health` document carries `endpoint` and `capabilities`,
+`kind` says what `data` holds: `items`, `item`, `annotations`, `annotation`,
+`collections`, `collection`, `stats`, or `health`. A `health` document carries
+`endpoint` and `capabilities`,
 so a script can check for `write` support rather than assume it. `schema` is
 bumped only when a field changes meaning or disappears — new fields may appear at
 any time, so ignore the ones you don't know.
 
+### Annotations
+
+`zot --json annotation list ATTACHMENT_KEY` emits an ordered `annotations`
+array. Each record carries the annotation and attachment keys, annotation type,
+page label, color, Zotero sort index, and `hasText`/`hasComment` flags. Text,
+comment bodies, and document position data are intentionally absent. JSONL uses
+the singular `annotation` kind for each self-describing record.
+
+`--raw` fetches all result pages and joins their complete Zotero annotation item
+envelopes into one array. Envelope fields are not reshaped, but both their shape
+and server order remain outside the stable contract.
+
 ### No `version` field
 
-Items and collections carry **no `version`**. A Zotero object version belongs to
+Items, collections, and stable annotation records carry **no `version`**. A Zotero object version belongs to
 the endpoint that issued it, and the Local API's has no meaning zotgo can promise:
 it is the *server* version, so it does not move when you edit an item locally
 without syncing, and the local write API replaces it with an unrelated local

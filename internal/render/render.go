@@ -30,6 +30,29 @@ func Items(w io.Writer, items []zotero.Envelope) {
 	tw.Flush()
 }
 
+// Annotations writes compact annotation metadata without text or PDF geometry.
+func Annotations(w io.Writer, attachmentKey string, annotations []zotero.Annotation) {
+	if len(annotations) == 0 {
+		fmt.Fprintf(w, "No annotations for attachment %s.\n", attachmentKey)
+		return
+	}
+	tw := newTable(w)
+	fmt.Fprintln(tw, "KEY\tPAGE\tSORT INDEX\tTYPE\tTEXT\tCOMMENT\tCOLOR")
+	for _, annotation := range annotations {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			annotation.Key,
+			annotation.PageLabel,
+			annotation.SortIndex,
+			annotation.Type,
+			yesNo(annotation.HasText),
+			yesNo(annotation.HasComment),
+			annotation.Color,
+		)
+	}
+	tw.Flush()
+	fmt.Fprintf(w, "\n%d annotations\n", len(annotations))
+}
+
 // Item writes a detailed view of a single item and its children.
 func Item(w io.Writer, item zotero.Envelope, children []zotero.Envelope) {
 	data, _ := item.ItemData()
@@ -159,6 +182,13 @@ func tagNames(tags []zotero.Tag) string {
 }
 
 // truncate shortens s to at most n runes, appending an ellipsis when cut.
+func yesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
+}
+
 func truncate(s string, n int) string {
 	r := []rune(s)
 	if len(r) <= n {

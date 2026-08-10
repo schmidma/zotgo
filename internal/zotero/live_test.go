@@ -10,6 +10,7 @@ package zotero
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 )
@@ -73,6 +74,88 @@ func TestLiveGroupResolutionAndReads(t *testing.T) {
 		}
 	}
 	t.Logf("group %q (id %d): %d items total", g.Data.Name, g.ID, page.TotalResults)
+}
+
+func TestLiveAnnotationsMatchRawChildren(t *testing.T) {
+	c := liveClient(t)
+	ctx := context.Background()
+
+	items, _, err := c.Items(ctx, UserLibrary(), ItemsOptions{ItemType: "annotation", Limit: 1})
+	if err != nil {
+		t.Fatalf("find annotation: %v", err)
+	}
+	if len(items) == 0 {
+		t.Skip("no annotations to exercise")
+	}
+	var seed struct {
+		ParentItem string `json:"parentItem"`
+	}
+	if err := json.Unmarshal(items[0].Data, &seed); err != nil {
+		t.Fatalf("decode seed annotation: %v", err)
+	}
+	if seed.ParentItem == "" {
+		t.Fatal("seed annotation has no parent attachment")
+	}
+
+	opts := ChildrenOptions{ItemType: "annotation", Limit: 100}
+	rawItems, err := c.AllRawChildItems(ctx, UserLibrary(), seed.ParentItem, opts)
+	if err != nil {
+		t.Fatalf("AllRawChildItems: %v", err)
+	}
+	typedItems, err := c.AllChildItems(ctx, UserLibrary(), seed.ParentItem, opts)
+	if err != nil {
+		t.Fatalf("AllChildItems: %v", err)
+	}
+	annotations, err := Annotations(typedItems)
+	if err != nil {
+		t.Fatalf("Annotations: %v", err)
+	}
+	if len(rawItems) != len(annotations) || len(annotations) == 0 {
+		t.Fatalf("raw=%d typed=%d, want equal nonzero counts", len(rawItems), len(annotations))
+	}
+
+	type expectedAnnotation struct {
+		ParentItem          string `json:"parentItem"`
+		ItemType            string `json:"itemType"`
+		AnnotationType      string `json:"annotationType"`
+		AnnotationText      string `json:"annotationText"`
+		AnnotationComment   string `json:"annotationComment"`
+		AnnotationSortIndex string `json:"annotationSortIndex"`
+	}
+	expected := make(map[string]expectedAnnotation, len(rawItems))
+	for _, rawItem := range rawItems {
+		var envelope struct {
+			Key  string             `json:"key"`
+			Data expectedAnnotation `json:"data"`
+		}
+		if err := json.Unmarshal(rawItem, &envelope); err != nil {
+			t.Fatalf("decode raw annotation envelope: %v", err)
+		}
+		if envelope.Key == "" || envelope.Data.ItemType != "annotation" || envelope.Data.ParentItem != seed.ParentItem {
+			t.Fatalf("unexpected raw annotation identity: key=%q type=%q parent=%q", envelope.Key, envelope.Data.ItemType, envelope.Data.ParentItem)
+		}
+		expected[envelope.Key] = envelope.Data
+	}
+	for i, annotation := range annotations {
+		want, ok := expected[annotation.Key]
+		if !ok {
+			t.Errorf("typed output invented annotation %q", annotation.Key)
+			continue
+		}
+		if annotation.AttachmentKey != want.ParentItem || annotation.Type != want.AnnotationType || annotation.SortIndex != want.AnnotationSortIndex {
+			t.Errorf("annotation %q metadata mismatch", annotation.Key)
+		}
+		if annotation.HasText != (want.AnnotationText != "") || annotation.HasComment != (want.AnnotationComment != "") {
+			t.Errorf("annotation %q presence flags mismatch", annotation.Key)
+		}
+		if i > 0 {
+			previous := annotations[i-1]
+			if previous.SortIndex > annotation.SortIndex && annotation.SortIndex != "" {
+				t.Errorf("annotations out of document order at %q and %q", previous.Key, annotation.Key)
+			}
+		}
+	}
+	t.Logf("checked %d annotations under one attachment", len(annotations))
 }
 
 func TestLiveNotFound(t *testing.T) {
