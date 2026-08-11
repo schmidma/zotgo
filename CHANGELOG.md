@@ -10,6 +10,11 @@ Planned and outstanding work is tracked in the
 
 ## [Unreleased]
 
+### Added
+
+- `zot collection path` resolves one or more collection keys to stable
+  root-to-leaf paths.
+
 ## [0.6.0] - 2026-07-29
 
 Local writes, against Zotero's official local write API

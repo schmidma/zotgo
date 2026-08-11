@@ -11,11 +11,24 @@ zot search "state estimation"  # search by title/creator/year
 zot search algae --everything  # include full text and notes
 zot show HRAC4E44              # one item with its attachments and notes
 zot collections               # collections as a tree (--flat for a list)
+zot collection path ABCD1234  # root-to-leaf ancestry for one or more keys
 zot stats                     # library-wide counts
 ```
 
 Global flags: `--library`/`-L` selects a group library (by name or id; default is
 My Library), and `--url` overrides the endpoint address.
+
+## Collection paths
+
+`zot collection path KEY...` resolves up to 100 collection keys in request
+order. Each path runs from the root collection to the requested leaf. Human
+output shows names for quick reading; stable JSON/JSONL also includes every
+segment's key so scripts do not need to parse the display string.
+
+The command reads the complete paginated collection index once, then resolves
+all requested paths in memory. Missing collections or parents, malformed parent
+references, and cycles are errors. `--raw` is unavailable because a path is
+derived from multiple collection records rather than one Zotero response.
 
 ## Export
 
