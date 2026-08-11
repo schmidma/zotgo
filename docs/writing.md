@@ -38,6 +38,38 @@ zot tag delete urgent                    # remove a tag from EVERY item (library
 `tag add`/`remove` edit one item's tags and preserve the rest; `tag delete`
 strips a tag from the whole library.
 
+## Managed PDF attachments
+
+```bash
+zot attachment import \
+  --parent ITEMKEY \
+  --file paper.pdf \
+  --title "Full Text PDF" \
+  --source-url https://example.org/paper.pdf
+```
+
+`attachment import` attaches one local PDF to an existing bibliographic parent.
+It creates `imported_file` metadata, uploads the bytes to Zotero, registers them
+as a Zotero-managed file, and then verifies the parent, title, source URL,
+filename, media type, MD5, and byte length. `--filename` overrides the
+local basename. `--source-url` is provenance stored on the attachment; zotgo
+does not download it. Imports are capped at 128 MiB while Zotero's current Local
+API receiver buffers each upload in memory before staging it to disk.
+
+Before writing, zotgo checks the parent's direct attachments. An existing exact
+MD5 is a successful no-op unless `--allow-duplicate` is set. This check is
+best-effort rather than atomic: Zotero exposes no create-unless-this-parent-has-
+no-matching-checksum precondition.
+
+The operation is multi-stage. If metadata creation succeeds but a later upload
+phase fails, zotgo reports the attachment key and last completed stage and does
+not attempt an unsafe rollback. `--raw` is unavailable because no single Zotero
+response represents the whole operation.
+
+`item create` can still create attachment metadata, but it does not ingest local
+bytes. It rejects local `path` and premature `filename` fields for new
+`imported_file` items and directs users to `attachment import`.
+
 ## Safety and authorization
 
 Every write **surfaces the target library, shows what it will do, and asks to
@@ -48,7 +80,9 @@ confirm**:
 
 The first write prompts for approval in Zotero. Choosing **Always Allow** stores a
 local API key in `~/.config/zotgo/local-api-key` (mode `0600`) so later writes
-don't re-prompt; **Allow** grants a single-use key. Set `ZOTGO_CONFIG_DIR` to
+don't re-prompt; **Allow** grants a single-use key. Managed attachment import
+requires **Always Allow**, because metadata creation, upload authorization, and
+registration are separate authenticated writes. Set `ZOTGO_CONFIG_DIR` to
 relocate the config directory.
 
 Writes carry Zotero's required `Zotero-Server-ID` and `If-Unmodified-Since-Version`

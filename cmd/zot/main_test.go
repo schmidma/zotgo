@@ -498,7 +498,7 @@ func TestDoctorJSON(t *testing.T) {
 		caps[c.Name] = c.Supported
 		reasons[c.Name] = c.Reason
 	}
-	for _, want := range []string{"read", "write", "connector-ingest", "local-file-access"} {
+	for _, want := range []string{"read", "write", "managed-file-upload", "connector-ingest", "local-file-access"} {
 		if _, ok := caps[want]; !ok {
 			t.Errorf("capability %q missing from --json", want)
 		}
@@ -512,6 +512,9 @@ func TestDoctorJSON(t *testing.T) {
 	}
 	if !strings.Contains(reasons["write"], "5015") {
 		t.Errorf("write reason should cite the upstream issue, got %q", reasons["write"])
+	}
+	if caps["managed-file-upload"] || !strings.Contains(reasons["managed-file-upload"], "managed-file upload") {
+		t.Errorf("managed-file-upload = %v (%q), want unsupported actionable reason", caps["managed-file-upload"], reasons["managed-file-upload"])
 	}
 	// A supported capability carries no reason.
 	if reasons["read"] != "" {
@@ -528,7 +531,7 @@ func TestDoctorHumanListsCapabilities(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	for _, want := range []string{
-		"Capabilities:", "read", "write", "connector-ingest", "local-file-access",
+		"Capabilities:", "read", "write", "managed-file-upload", "connector-ingest", "local-file-access",
 		"zotero/zotero#5015", "local endpoint",
 	} {
 		if !strings.Contains(out, want) {

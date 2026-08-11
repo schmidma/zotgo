@@ -23,8 +23,8 @@ for every command, so a script learns it once:
 }
 ```
 
-`kind` says what `data` holds: `items`, `item`, `attachment`, `collections`,
-`collection`, `stats`, or `health`. A `health` document carries `endpoint` and
+`kind` says what `data` holds: `items`, `item`, `attachment`,
+`attachment-import`, `collections`, `collection`, `stats`, or `health`. A `health` document carries `endpoint` and
 `capabilities`,
 so a script can check for `write` support rather than assume it. `schema` is
 bumped only when a field changes meaning or disappears — new fields may appear at
@@ -48,6 +48,22 @@ The status describes only API evidence:
 
 None of these states is a durable filesystem-existence assertion. `--raw`
 preserves the complete single-item envelope.
+
+### Attachment imports
+
+`zot --json attachment import ...` emits one `attachment-import` record. JSONL
+emits the same self-describing record on one line. `status` is `planned`,
+`duplicate`, `imported`, `partial`, or `failed`; `stage` identifies the last
+completed phase. The record always contains parent key, filename, media type,
+size, and MD5. Attachment key, file status, focused verification, and structured
+failure are explicit nullable fields.
+
+Successful verification covers the parent relationship, managed storage, title,
+source URL, filename, media type, byte length, and checksum. A partial
+result retains the newly created attachment key for diagnosis and deliberately
+does not claim rollback. Local source paths, API credentials, upload URLs and
+keys, and Zotero versions never appear. `--raw` is unavailable because the
+result composes several requests.
 
 ### No `version` field
 
@@ -73,5 +89,6 @@ zot --jsonl list | jq -r '.data | "\(.key)\t\(.title)"'
 
 `--raw` passes Zotero's API response straight through. It is an escape hatch for
 fields zotgo does not model, and it is **not covered by `schema`**: its shape is
-Zotero's and changes when Zotero changes. `stats` and `doctor` reject `--raw`,
-because zotgo derives them and there is no underlying Zotero response.
+Zotero's and changes when Zotero changes. `stats`, `doctor`, and `attachment
+import` reject `--raw`, because zotgo derives them and there is no single
+underlying Zotero response.

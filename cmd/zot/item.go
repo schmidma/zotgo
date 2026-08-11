@@ -65,6 +65,13 @@ func itemCreateAction(ctx context.Context, cmd *cli.Command) error {
 	if len(items) > zotero.MaxWriteObjects {
 		return fmt.Errorf("%d items exceeds the %d-item batch limit", len(items), zotero.MaxWriteObjects)
 	}
+	attachmentWarnings, err := attachmentItemCreateGuidance(items)
+	if err != nil {
+		return err
+	}
+	for _, warning := range attachmentWarnings {
+		fmt.Fprintln(errOut(cmd), "zot: warning: "+warning)
+	}
 
 	c, lib, err := resolveLibrary(ctx, cmd)
 	if err != nil {
@@ -147,6 +154,33 @@ func printItemSummary(w io.Writer, items []json.RawMessage) {
 		_ = json.Unmarshal(it, &m)
 		fmt.Fprintf(w, "  + %s: %s\n", orDash(m.ItemType), orDash(m.Title))
 	}
+}
+
+func attachmentItemCreateGuidance(items []json.RawMessage) ([]string, error) {
+	warnings := make([]string, 0)
+	for i, raw := range items {
+		var item struct {
+			Key      string          `json:"key"`
+			ItemType string          `json:"itemType"`
+			LinkMode string          `json:"linkMode"`
+			Filename json.RawMessage `json:"filename"`
+			Path     json.RawMessage `json:"path"`
+		}
+		if err := json.Unmarshal(raw, &item); err != nil {
+			return nil, fmt.Errorf("decode item %d for attachment guidance: %w", i, err)
+		}
+		if item.ItemType != "attachment" || item.LinkMode != "imported_file" {
+			continue
+		}
+		if len(item.Path) != 0 && string(item.Path) != `""` && string(item.Path) != "null" {
+			return nil, fmt.Errorf("item %d: item create cannot ingest a local attachment path; use zot attachment import --parent KEY --file PATH", i)
+		}
+		if item.Key == "" && len(item.Filename) != 0 && string(item.Filename) != `""` && string(item.Filename) != "null" {
+			return nil, fmt.Errorf("item %d: filename cannot be set before Zotero assigns an attachment key; use zot attachment import --parent KEY --file PATH", i)
+		}
+		warnings = append(warnings, fmt.Sprintf("item %d is imported_file metadata only; item create will not upload file bytes (use zot attachment import)", i))
+	}
+	return warnings, nil
 }
 
 func reportWriteResult(w io.Writer, res zotero.WriteResult) {

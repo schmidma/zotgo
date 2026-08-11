@@ -53,6 +53,9 @@ func TestCapabilities_ReadyEndpoint(t *testing.T) {
 	if h.Supports(CapabilityWrite) {
 		t.Error("write must not be advertised without the write API detected")
 	}
+	if h.Supports(CapabilityManagedFileUpload) {
+		t.Error("managed-file upload must not be advertised without the write API detected")
+	}
 }
 
 // Local write is probe-derived from the Zotero-Server-ID header: present means
@@ -62,6 +65,9 @@ func TestCapabilities_LocalWriteFollowsServerID(t *testing.T) {
 	if !withAPI.Supports(CapabilityWrite) {
 		t.Error("write should be supported when the Local API returns a Zotero-Server-ID")
 	}
+	if !withAPI.Supports(CapabilityManagedFileUpload) {
+		t.Error("managed-file upload should be supported when the Local API returns a Zotero-Server-ID")
+	}
 
 	noAPI := Health{ZoteroRunning: true, LocalAPIEnabled: true}
 	w := capByName(t, noAPI, CapabilityWrite)
@@ -70,6 +76,10 @@ func TestCapabilities_LocalWriteFollowsServerID(t *testing.T) {
 	}
 	if !strings.Contains(w.Reason, "5015") {
 		t.Errorf("write reason should cite the upstream issue, got %q", w.Reason)
+	}
+	upload := capByName(t, noAPI, CapabilityManagedFileUpload)
+	if upload.Supported || !strings.Contains(upload.Reason, "managed-file upload") {
+		t.Errorf("managed-file upload = %+v, want unsupported actionable reason", upload)
 	}
 }
 
@@ -142,7 +152,8 @@ func TestCapabilities_EveryUnsupportedOneHasAReason(t *testing.T) {
 // Order is part of the contract: doctor and --json both render this list.
 func TestCapabilities_StableOrder(t *testing.T) {
 	want := []Capability{
-		CapabilityRead, CapabilityWrite, CapabilityConnectorIngest, CapabilityLocalFileAccess,
+		CapabilityRead, CapabilityWrite, CapabilityManagedFileUpload,
+		CapabilityConnectorIngest, CapabilityLocalFileAccess,
 	}
 	got := Health{ZoteroRunning: true, LocalAPIEnabled: true}.Capabilities()
 	if len(got) != len(want) {
