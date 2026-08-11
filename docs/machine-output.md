@@ -23,10 +23,10 @@ for every command, so a script learns it once:
 }
 ```
 
-`kind` says what `data` holds: `items`, `item`, `attachment`, `relations`,
-`relation`, `annotations`, `annotation`, `notes`, `note`, `collections`,
-`collection`, `collection-paths`, `collection-path`, `stats`, `health`, or
-`item-mutations`. A `health` document carries `endpoint` and `capabilities`, so a script can check for `write` support rather than assume
+`kind` says what `data` holds: `items`, `item`, `attachment`,
+`attachment-import`, `relations`, `relation`, `annotations`, `annotation`,
+`notes`, `note`, `collections`, `collection`, `collection-paths`,
+`collection-path`, `stats`, `health`, `item-mutation`, or `item-mutations`. A `health` document carries `endpoint` and `capabilities`, so a script can check for `write` support rather than assume
 it. `schema` is bumped only when a field changes meaning or disappears — new
 fields may appear at any time, so ignore the ones you don't know.
 
@@ -93,6 +93,22 @@ The status describes only API evidence:
 None of these states is a durable filesystem-existence assertion. `--raw`
 preserves the complete single-item envelope.
 
+### Attachment imports
+
+`zot --json attachment import ...` emits one `attachment-import` record. JSONL
+emits the same self-describing record on one line. `status` is `planned`,
+`duplicate`, `imported`, `partial`, or `failed`; `stage` identifies the last
+completed phase. The record always contains parent key, filename, media type,
+size, and MD5. Attachment key, file status, focused verification, and structured
+failure are explicit nullable fields.
+
+Successful verification covers the parent relationship, managed storage, title,
+source URL, filename, media type, byte length, and checksum. A partial result
+retains the newly created attachment key for diagnosis and deliberately does not
+claim rollback. Local source paths, API credentials, upload URLs and keys, and
+Zotero versions never appear. `--raw` is unavailable because the result composes
+several requests.
+
 ### Collection paths
 
 `zot --json collection path KEY...` emits a `collection-paths` array in request
@@ -142,5 +158,5 @@ zot --jsonl list | jq -r '.data | "\(.key)\t\(.title)"'
 `--raw` passes Zotero's API response straight through. It is an escape hatch for
 fields zotgo does not model, and it is **not covered by `schema`**: its shape is
 Zotero's and changes when Zotero changes. `stats`, `doctor`, `collection path`,
-and the three item write commands reject `--raw`, because their output is
-derived and is not a raw Zotero response.
+`attachment import`, and the three item write commands reject `--raw`, because
+their output is derived and is not a raw Zotero response.

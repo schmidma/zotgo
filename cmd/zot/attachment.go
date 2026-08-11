@@ -16,9 +16,10 @@ import (
 func attachmentCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "attachment",
-		Usage: "inspect attachment metadata",
+		Usage: "inspect attachments or import managed files",
 		Commands: []*cli.Command{
 			attachmentShowCommand(),
+			attachmentImportCommand(),
 		},
 	}
 }

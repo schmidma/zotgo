@@ -193,7 +193,7 @@ func (c *Client) AllRawChildItems(ctx context.Context, library LibraryRef, key s
 		}
 		children := make([]json.RawMessage, 0)
 		if err := json.Unmarshal([]byte(trimmed), &children); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decode child items: %w", err)
 		}
 		all = append(all, children...)
 		start, more, err := nextStart(page.NextURL, opts.Start)

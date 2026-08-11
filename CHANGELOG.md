@@ -24,6 +24,8 @@ Planned and outstanding work is tracked in the
   file status without opening Zotero's database or downloading the file.
 - `zot collection path` resolves one or more collection keys to stable
   root-to-leaf paths.
+- `zot attachment import` creates an `imported_file` child, uploads a local PDF
+  through Zotero's managed-file protocol, and verifies the stored metadata.
 
 ## [0.6.0] - 2026-07-29
 
