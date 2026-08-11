@@ -71,11 +71,14 @@ func (c *Client) writeRequest(ctx context.Context, method, path string, opts wri
 		req.Header.Set("If-Unmodified-Since-Version", strconv.Itoa(*opts.ifUnmodifiedSince))
 	}
 
-	httpClient := c.http
+	httpClient := *c.http
 	if opts.timeout > 0 {
-		cp := *c.http
-		cp.Timeout = opts.timeout
-		httpClient = &cp
+		httpClient.Timeout = opts.timeout
+	}
+	// Local writes carry a Zotero API key. Never let the HTTP client forward
+	// that custom credential through a redirect.
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
 	}
 
 	resp, err := httpClient.Do(req)

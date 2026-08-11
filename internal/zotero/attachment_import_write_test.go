@@ -3,6 +3,7 @@ package zotero
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -53,6 +54,36 @@ func TestCreateItemsReturningKeysRejectsMissingKey(t *testing.T) {
 	_, err := client.CreateItemsReturningKeys(context.Background(), UserLibrary(), []json.RawMessage{json.RawMessage(`{}`)})
 	if err == nil || !strings.Contains(err.Error(), "has no key") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestWriteBatchDoesNotFollowRedirect(t *testing.T) {
+	redirected := false
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Zotero-Server-ID", strings.Repeat("S", 12))
+	})
+	mux.HandleFunc("POST /api/users/0/items", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", "/capture")
+		w.WriteHeader(http.StatusFound)
+	})
+	mux.HandleFunc("GET /capture", func(w http.ResponseWriter, r *http.Request) {
+		redirected = true
+		if r.Header.Get("Zotero-API-Key") != "" {
+			t.Error("redirect received Zotero API key")
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := New(srv.URL)
+	client.SetLocalKey("key")
+	_, err := client.CreateItemsReturningKeys(context.Background(), UserLibrary(), []json.RawMessage{json.RawMessage(`{}`)})
+	var statusErr StatusError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusFound {
+		t.Fatalf("error = %v, want StatusError(302)", err)
+	}
+	if redirected {
+		t.Fatal("authenticated write followed redirect")
 	}
 }
 
