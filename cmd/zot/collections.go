@@ -12,9 +12,10 @@ import (
 
 func collectionsCommand() *cli.Command {
 	return &cli.Command{
-		Name:    "collections",
-		Aliases: []string{"cols"},
-		Usage:   "list collections as a tree",
+		Name:        "collections",
+		Aliases:     []string{"cols"},
+		Usage:       "list collections as a tree",
+		Description: "Read the collection hierarchy and keys. To create, rename, or delete collections on the local endpoint, use `zot collection --help`.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "flat", Usage: "list flat (key + name) instead of a tree"},
 		},

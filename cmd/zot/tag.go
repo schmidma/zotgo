@@ -15,8 +15,9 @@ import (
 
 func tagCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "tag",
-		Usage: "add, remove, and delete tags (local endpoint only)",
+		Name:        "tag",
+		Usage:       "add, remove, and delete tags (local endpoint only)",
+		Description: "Add or remove tags on one item, or delete tags from every item in the selected library. Write commands support --dry-run and require confirmation unless --yes is set.",
 		Commands: []*cli.Command{
 			tagAddCommand(),
 			tagRemoveCommand(),
@@ -44,7 +45,7 @@ func tagDeleteAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	names := cmd.Args().Slice()
 	if len(names) == 0 {
-		return errors.New("missing tag name(s) (usage: zot tag delete <tag>...)")
+		return errors.New("missing tag name(s); see `zot tag delete --help`")
 	}
 	if len(names) > zotero.MaxDeleteObjects {
 		return fmt.Errorf("%d tags exceeds the %d-tag delete limit", len(names), zotero.MaxDeleteObjects)
@@ -124,11 +125,11 @@ func itemTagAction(ctx context.Context, cmd *cli.Command, add bool) error {
 	}
 	itemKey := cmd.String("item")
 	if itemKey == "" {
-		return errors.New("specify the item with --item <key>")
+		return fmt.Errorf("missing --item <key>; see `zot tag %s --help`", cmd.Name)
 	}
 	names := cmd.Args().Slice()
 	if len(names) == 0 {
-		return errors.New("missing tag name(s)")
+		return fmt.Errorf("missing tag name(s); see `zot tag %s --help`", cmd.Name)
 	}
 
 	c, lib, err := resolveLibrary(ctx, cmd)

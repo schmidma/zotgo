@@ -35,7 +35,7 @@ func exportCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			format := strings.ToLower(cmd.Args().First())
 			if format == "" {
-				return fmt.Errorf("missing format (usage: zot export <%s>)", strings.Join(allFormats(), "|"))
+				return fmt.Errorf("missing format; see `zot export --help` (formats: %s)", strings.Join(allFormats(), ", "))
 			}
 
 			c, lib, err := resolveLibrary(ctx, cmd)

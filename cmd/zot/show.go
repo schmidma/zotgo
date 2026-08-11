@@ -20,7 +20,7 @@ func showCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			key := cmd.Args().First()
 			if key == "" {
-				return errors.New("missing item key (usage: zot show <item-key>)")
+				return errors.New("missing item key; see `zot show --help`")
 			}
 			c, lib, err := resolveLibrary(ctx, cmd)
 			if err != nil {

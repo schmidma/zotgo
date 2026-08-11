@@ -12,9 +12,10 @@ import (
 
 func searchCommand() *cli.Command {
 	return &cli.Command{
-		Name:      "search",
-		Usage:     "search items by text",
-		ArgsUsage: "<query>",
+		Name:        "search",
+		Usage:       "search items by text",
+		ArgsUsage:   "<query>",
+		Description: "Search title, creator, and year by default. Use --everything for full text and notes, and --limit 0 for every result page.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "everything", Aliases: []string{"e"}, Usage: "search full text and notes, not just title/creator/year"},
 			&cli.StringFlag{Name: "type", Usage: "filter by item type (e.g. journalArticle)"},
@@ -23,7 +24,7 @@ func searchCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			query := strings.TrimSpace(strings.Join(cmd.Args().Slice(), " "))
 			if query == "" {
-				return errors.New("missing search query (usage: zot search <query>)")
+				return errors.New("missing search query; see `zot search --help`")
 			}
 			c, lib, err := resolveLibrary(ctx, cmd)
 			if err != nil {
