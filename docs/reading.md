@@ -16,6 +16,7 @@ zot annotation list ABCD1234   # compact annotations under one attachment
 zot note list HRAC4E44         # body-free child-note metadata
 zot note get ABCD1234          # one explicitly requested note with HTML
 zot collections               # collections as a tree (--flat for a list)
+zot collection path ABCD1234  # root-to-leaf ancestry for one or more keys
 zot stats                     # library-wide counts
 ```
 
@@ -63,6 +64,18 @@ title or summary, so the list does not invent one from the HTML.
 rich-note HTML; stable JSON/JSONL includes the same exact HTML in `html`. `--raw`
 returns the complete Zotero item envelope instead. A standalone note can be read
 with `get`, while `list` expects a bibliographic parent item.
+
+## Collection paths
+
+`zot collection path KEY...` resolves up to 100 collection keys in request
+order. Each path runs from the root collection to the requested leaf. Human
+output shows names for quick reading; stable JSON/JSONL also includes every
+segment's key so scripts do not need to parse the display string.
+
+The command reads the complete paginated collection index once, then resolves
+all requested paths in memory. Missing collections or parents, malformed parent
+references, and cycles are errors. `--raw` is unavailable because a path is
+derived from multiple collection records rather than one Zotero response.
 
 ## Export
 

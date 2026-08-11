@@ -419,6 +419,85 @@ func TestLiveAttachmentMatchesRawItem(t *testing.T) {
 	t.Logf("checked attachment mode %s with conservative status %s", attachment.LinkMode, status.State)
 }
 
+func TestLiveCollectionPathMatchesRawCollectionData(t *testing.T) {
+	c := liveClient(t)
+	rawCollections, err := c.AllRawCollections(context.Background(), UserLibrary(), CollectionsOptions{})
+	if err != nil {
+		t.Fatalf("AllRawCollections: %v", err)
+	}
+	if len(rawCollections) == 0 {
+		t.Skip("no collections to exercise")
+	}
+
+	type rawNode struct {
+		Name             string          `json:"name"`
+		ParentCollection json.RawMessage `json:"parentCollection"`
+	}
+	nodes := make(map[string]rawNode, len(rawCollections))
+	for i, raw := range rawCollections {
+		var envelope struct {
+			Key  string          `json:"key"`
+			Data json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &envelope); err != nil {
+			t.Fatalf("decode raw collection envelope %d: %v", i, err)
+		}
+		var node rawNode
+		if err := json.Unmarshal(envelope.Data, &node); err != nil {
+			t.Fatalf("decode raw collection %q: %v", envelope.Key, err)
+		}
+		nodes[envelope.Key] = node
+	}
+
+	var deepestKey string
+	var deepest []CollectionPathSegment
+	for key := range nodes {
+		current := key
+		seen := make(map[string]bool)
+		var reversed []CollectionPathSegment
+		for current != "" {
+			if seen[current] {
+				t.Fatalf("live collection graph contains cycle at %q", current)
+			}
+			seen[current] = true
+			node, ok := nodes[current]
+			if !ok {
+				t.Fatalf("live collection %q references missing parent %q", key, current)
+			}
+			reversed = append(reversed, CollectionPathSegment{Key: current, Name: node.Name})
+			var parent string
+			if len(node.ParentCollection) != 0 && string(node.ParentCollection) != "false" && string(node.ParentCollection) != "null" {
+				if err := json.Unmarshal(node.ParentCollection, &parent); err != nil {
+					t.Fatalf("decode raw parent for %q: %v", current, err)
+				}
+			}
+			current = parent
+		}
+		segments := make([]CollectionPathSegment, len(reversed))
+		for i := range reversed {
+			segments[len(reversed)-1-i] = reversed[i]
+		}
+		if len(segments) > len(deepest) {
+			deepestKey = key
+			deepest = segments
+		}
+	}
+
+	paths, err := ResolveRawCollectionPaths(rawCollections, []string{deepestKey})
+	if err != nil {
+		t.Fatalf("ResolveRawCollectionPaths: %v", err)
+	}
+	if len(paths) != 1 || len(paths[0].Segments) != len(deepest) {
+		t.Fatalf("resolved path = %#v, want %d segments", paths, len(deepest))
+	}
+	for i, segment := range paths[0].Segments {
+		if segment != deepest[i] {
+			t.Fatalf("segment %d = %#v, want %#v", i, segment, deepest[i])
+		}
+	}
+	t.Logf("checked collection path with %d segments across %d collections", len(deepest), len(rawCollections))
+}
+
 func TestLiveNotFound(t *testing.T) {
 	c := liveClient(t)
 	if _, err := c.Item(context.Background(), UserLibrary(), "ZZZZZZZZ"); err != ErrNotFound {

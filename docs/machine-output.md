@@ -25,8 +25,8 @@ for every command, so a script learns it once:
 
 `kind` says what `data` holds: `items`, `item`, `attachment`, `relations`,
 `relation`, `annotations`, `annotation`, `notes`, `note`, `collections`,
-`collection`, `stats`, `health`, or `item-mutations`. A `health` document carries `endpoint`
-and `capabilities`, so a script can check for `write` support rather than assume
+`collection`, `collection-paths`, `collection-path`, `stats`, `health`, or
+`item-mutations`. A `health` document carries `endpoint` and `capabilities`, so a script can check for `write` support rather than assume
 it. `schema` is bumped only when a field changes meaning or disappears — new
 fields may appear at any time, so ignore the ones you don't know.
 
@@ -93,10 +93,25 @@ The status describes only API evidence:
 None of these states is a durable filesystem-existence assertion. `--raw`
 preserves the complete single-item envelope.
 
+### Collection paths
+
+`zot --json collection path KEY...` emits a `collection-paths` array in request
+order. Each record has the requested collection's `key`, `name`, and
+`parentKey`, plus root-to-leaf `segments` containing both keys and names.
+`displayPath` joins the names with ` / ` for display only; scripts should use
+`segments` rather than parse that string. JSONL uses the singular
+`collection-path` kind for each self-describing record.
+
+The command accepts 1–100 keys and reads the paginated collection index once.
+Missing collections or parents, malformed parent references, and cycles are
+errors. `--raw` is unavailable because each path is derived from multiple
+collection records rather than one Zotero response.
+
 ### No `version` field
 
-Items, collections, stable attachment records, stable annotation records, and
-stable note records carry **no `version`**. A Zotero object version belongs to the endpoint that issued it,
+Items, collections, collection-path records, stable attachment records, stable
+annotation records, and stable note records carry **no `version`**. A Zotero
+object version belongs to the endpoint that issued it,
 and the Local API's has no meaning zotgo can promise:
 it is the *server* version, so it does not move when you edit an item locally
 without syncing, and the local write API replaces it with an unrelated local
@@ -126,6 +141,6 @@ zot --jsonl list | jq -r '.data | "\(.key)\t\(.title)"'
 
 `--raw` passes Zotero's API response straight through. It is an escape hatch for
 fields zotgo does not model, and it is **not covered by `schema`**: its shape is
-Zotero's and changes when Zotero changes. `stats`, `doctor`, and the three item
-write commands reject `--raw`, because their output is derived and is not a raw
-Zotero response.
+Zotero's and changes when Zotero changes. `stats`, `doctor`, `collection path`,
+and the three item write commands reject `--raw`, because their output is
+derived and is not a raw Zotero response.

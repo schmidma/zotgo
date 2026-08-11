@@ -1,6 +1,7 @@
 package zotero
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -229,7 +230,14 @@ func childrenValues(opts ChildrenOptions) url.Values {
 
 // Collections reads a single page of collections.
 func (c *Client) Collections(ctx context.Context, library LibraryRef, opts CollectionsOptions) ([]Envelope, Page, error) {
-	path := c.profile.LibraryPrefix(library) + "/collections"
+	path, values := collectionsPath(c.profile, library, opts)
+	var collections []Envelope
+	page, err := c.getJSON(ctx, path, values, &collections)
+	return collections, page, err
+}
+
+func collectionsPath(profile Profile, library LibraryRef, opts CollectionsOptions) (string, url.Values) {
+	path := profile.LibraryPrefix(library) + "/collections"
 	if opts.Top {
 		path += "/top"
 	}
@@ -237,9 +245,7 @@ func (c *Client) Collections(ctx context.Context, library LibraryRef, opts Colle
 	if opts.Start > 0 {
 		values = url.Values{"start": {strconv.Itoa(opts.Start)}}
 	}
-	var collections []Envelope
-	page, err := c.getJSON(ctx, path, values, &collections)
-	return collections, page, err
+	return path, values
 }
 
 // AllCollections follows Link rel="next" and returns every collection.
@@ -263,6 +269,50 @@ func (c *Client) AllCollections(ctx context.Context, library LibraryRef, opts Co
 		}
 		opts.Start = start
 	}
+}
+
+// AllRawCollections follows pagination while preserving each collection
+// envelope without decoding endpoint-scoped version fields.
+func (c *Client) AllRawCollections(ctx context.Context, library LibraryRef, opts CollectionsOptions) ([]json.RawMessage, error) {
+	var all []json.RawMessage
+	for {
+		path, values := collectionsPath(c.profile, library, opts)
+		body, page, err := c.do(ctx, path, values)
+		if err != nil {
+			return nil, err
+		}
+		collections, err := decodeRawCollectionPage(body)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, collections...)
+		start, more, err := nextStart(page.NextURL, opts.Start)
+		if err != nil {
+			return nil, err
+		}
+		if !more {
+			return all, nil
+		}
+		if err := c.honorBackoff(ctx, page); err != nil {
+			return nil, err
+		}
+		opts.Start = start
+	}
+}
+
+func decodeRawCollectionPage(body []byte) ([]json.RawMessage, error) {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("decode collections: empty response body")
+	}
+	if trimmed[0] != '[' {
+		return nil, fmt.Errorf("decode collections: expected a JSON array")
+	}
+	var collections []json.RawMessage
+	if err := json.Unmarshal(trimmed, &collections); err != nil {
+		return nil, fmt.Errorf("decode collections: %w", err)
+	}
+	return collections, nil
 }
 
 func itemValues(opts ItemsOptions) url.Values {

@@ -20,21 +20,23 @@ const SchemaVersion = 2
 type Kind string
 
 const (
-	KindItem          Kind = "item"
-	KindItems         Kind = "items"
-	KindAttachment    Kind = "attachment"
-	KindRelation      Kind = "relation"
-	KindRelations     Kind = "relations"
-	KindAnnotation    Kind = "annotation"
-	KindAnnotations   Kind = "annotations"
-	KindNote          Kind = "note"
-	KindNotes         Kind = "notes"
-	KindCollection    Kind = "collection"
-	KindCollections   Kind = "collections"
-	KindStats         Kind = "stats"
-	KindHealth        Kind = "health"
-	KindItemMutation  Kind = "item-mutation"
-	KindItemMutations Kind = "item-mutations"
+	KindItem            Kind = "item"
+	KindItems           Kind = "items"
+	KindAttachment      Kind = "attachment"
+	KindRelation        Kind = "relation"
+	KindRelations       Kind = "relations"
+	KindAnnotation      Kind = "annotation"
+	KindAnnotations     Kind = "annotations"
+	KindNote            Kind = "note"
+	KindNotes           Kind = "notes"
+	KindCollection      Kind = "collection"
+	KindCollections     Kind = "collections"
+	KindCollectionPath  Kind = "collection-path"
+	KindCollectionPaths Kind = "collection-paths"
+	KindStats           Kind = "stats"
+	KindHealth          Kind = "health"
+	KindItemMutation    Kind = "item-mutation"
+	KindItemMutations   Kind = "item-mutations"
 )
 
 // Document is the envelope wrapping every machine-readable response.
