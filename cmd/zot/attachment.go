@@ -15,8 +15,9 @@ import (
 
 func attachmentCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "attachment",
-		Usage: "inspect attachments or import managed files",
+		Name:        "attachment",
+		Usage:       "inspect attachments or import managed files",
+		Description: "Use `attachment show` for API-reported metadata and file status, or `attachment import` to attach a local PDF as a Zotero-managed file. Managed imports are local-only.",
 		Commands: []*cli.Command{
 			attachmentShowCommand(),
 			attachmentImportCommand(),
@@ -34,7 +35,7 @@ func attachmentShowCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			key := cmd.Args().First()
 			if key == "" {
-				return errors.New("missing attachment key (usage: zot attachment show <attachment-key>)")
+				return errors.New("missing attachment key; see `zot attachment show --help`")
 			}
 			c, lib, err := resolveLibrary(ctx, cmd)
 			if err != nil {

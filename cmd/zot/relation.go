@@ -14,8 +14,9 @@ import (
 
 func relationCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "relation",
-		Usage: "inspect item relations",
+		Name:        "relation",
+		Usage:       "inspect item relations",
+		Description: "List one item's outgoing relation predicates and targets with `zot relation list`.",
 		Commands: []*cli.Command{
 			relationListCommand(),
 		},
@@ -32,7 +33,7 @@ func relationListCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			key := cmd.Args().First()
 			if key == "" {
-				return errors.New("missing item key (usage: zot relation list <item-key>)")
+				return errors.New("missing item key; see `zot relation list --help`")
 			}
 			c, lib, err := resolveLibrary(ctx, cmd)
 			if err != nil {

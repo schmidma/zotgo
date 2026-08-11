@@ -32,7 +32,9 @@ zot item create < item.json    # create (needs a write-capable Zotero build)
 ```
 
 Point the same commands at the hosted Web API with `--web`, and get
-script-friendly output with `--json` / `--jsonl` / `--raw`.
+script-friendly output with `--json` / `--jsonl` / `--raw`. These examples show
+common workflows; `zot --help` and `zot <command> --help` are the authoritative
+references for current commands, options, and limitations.
 
 ## Documentation
 

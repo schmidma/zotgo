@@ -15,8 +15,9 @@ import (
 
 func noteCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "note",
-		Usage: "inspect Zotero notes",
+		Name:        "note",
+		Usage:       "inspect Zotero notes",
+		Description: "Use `note list` for body-free child-note metadata and `note get` when exact rich HTML is explicitly needed.",
 		Commands: []*cli.Command{
 			noteListCommand(),
 			noteGetCommand(),
@@ -34,7 +35,7 @@ func noteListCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			itemKey := cmd.Args().First()
 			if itemKey == "" {
-				return errors.New("missing item key (usage: zot note list <item-key>)")
+				return errors.New("missing item key; see `zot note list --help`")
 			}
 			c, lib, err := resolveLibrary(ctx, cmd)
 			if err != nil {
@@ -100,7 +101,7 @@ func noteGetCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			noteKey := cmd.Args().First()
 			if noteKey == "" {
-				return errors.New("missing note key (usage: zot note get <note-key>)")
+				return errors.New("missing note key; see `zot note get --help`")
 			}
 			c, lib, err := resolveLibrary(ctx, cmd)
 			if err != nil {

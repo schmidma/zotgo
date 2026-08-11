@@ -39,10 +39,16 @@ func main() {
 
 func rootCommand() *cli.Command {
 	return &cli.Command{
-		Name:                  "zot",
-		Usage:                 "a CLI for a running Zotero 7+, over its HTTP API",
-		Version:               version,
+		Name:    "zot",
+		Usage:   "a CLI for a running Zotero 7+, over its HTTP API",
+		Version: version,
+		Description: "Start with `zot doctor` to check the endpoint and its capabilities.\n\n" +
+			"Find items with `zot search` or `zot list`, inspect one with `zot show`, and browse organization with `zot collections`. " +
+			"Attachments, relations, annotations, and notes have their own command families; use `zot export` for translators and summaries. " +
+			"Local writes live under `zot item`, `zot collection`, `zot tag`, and `zot attachment import`.\n\n" +
+			"Run `zot <command> --help` for authoritative syntax, options, and limitations.",
 		EnableShellCompletion: true,
+		Suggest:               true,
 		// main() owns error printing and exit codes; keep urfave from also
 		// printing or calling os.Exit.
 		ExitErrHandler: func(context.Context, *cli.Command, error) {},
@@ -82,22 +88,37 @@ func rootCommand() *cli.Command {
 				Usage: "emit Zotero's own API response, unshaped and unversioned",
 			},
 		},
-		Commands: []*cli.Command{
-			doctorCommand(),
-			listCommand(),
-			showCommand(),
-			searchCommand(),
-			attachmentCommand(),
-			relationCommand(),
-			annotationCommand(),
-			noteCommand(),
-			collectionsCommand(),
-			statsCommand(),
-			exportCommand(),
-			itemCommand(),
-			collectionCommand(),
-			tagCommand(),
-		},
+		Commands: discoveryCommands(),
+	}
+}
+
+func discoveryCommands() []*cli.Command {
+	groups := []struct {
+		category string
+		commands []*cli.Command
+	}{
+		{"Get started", []*cli.Command{doctorCommand()}},
+		{"Find and inspect", []*cli.Command{listCommand(), showCommand(), searchCommand(), collectionsCommand(), statsCommand()}},
+		{"Item details", []*cli.Command{attachmentCommand(), relationCommand(), annotationCommand(), noteCommand()}},
+		{"Export", []*cli.Command{exportCommand()}},
+		{"Organize collections", []*cli.Command{collectionCommand()}},
+		{"Modify (local only)", []*cli.Command{itemCommand(), tagCommand()}},
+	}
+	commands := make([]*cli.Command, 0, 14)
+	for _, group := range groups {
+		for _, command := range group.commands {
+			command.Category = group.category
+			enableSuggestions(command)
+			commands = append(commands, command)
+		}
+	}
+	return commands
+}
+
+func enableSuggestions(command *cli.Command) {
+	command.Suggest = true
+	for _, child := range command.Commands {
+		enableSuggestions(child)
 	}
 }
 

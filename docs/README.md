@@ -2,7 +2,9 @@
 
 `zot` is a single, zero-dependency Go binary that drives a running
 [Zotero](https://www.zotero.org/) 7+ through its own HTTP contracts. It never
-opens `zotero.sqlite`.
+opens `zotero.sqlite`. These guides explain workflows and durable contracts;
+use `zot --help` and `zot <command> --help` for current command syntax and
+options.
 
 - **[Getting started](getting-started.md)** — install, enable the Local API, and `zot doctor`.
 - **[Reading your library](reading.md)** — `list`, `show`, `search`, `collections`, `stats`, `export`.

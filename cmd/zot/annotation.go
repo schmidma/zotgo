@@ -14,8 +14,9 @@ import (
 
 func annotationCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "annotation",
-		Usage: "inspect attachment annotations",
+		Name:        "annotation",
+		Usage:       "inspect attachment annotations",
+		Description: "List compact annotation metadata for one attachment with `zot annotation list`; stable output omits annotation bodies.",
 		Commands: []*cli.Command{
 			annotationListCommand(),
 		},
@@ -32,7 +33,7 @@ func annotationListCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			attachmentKey := cmd.Args().First()
 			if attachmentKey == "" {
-				return errors.New("missing attachment key (usage: zot annotation list <attachment-key>)")
+				return errors.New("missing attachment key; see `zot annotation list --help`")
 			}
 			c, lib, err := resolveLibrary(ctx, cmd)
 			if err != nil {

@@ -21,8 +21,9 @@ import (
 
 func itemCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "item",
-		Usage: "create and modify items (local endpoint only)",
+		Name:        "item",
+		Usage:       "create and modify items (local endpoint only)",
+		Description: "Create from JSON, patch selected fields, delete by key, or print an item template. Write commands support --dry-run and require confirmation unless --yes is set.",
 		Commands: []*cli.Command{
 			itemCreateCommand(),
 			itemPatchCommand(),
@@ -384,7 +385,7 @@ func itemTemplateCommand() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			itemType := cmd.Args().First()
 			if itemType == "" {
-				return errors.New("missing item type (e.g. zot item template book)")
+				return errors.New("missing item type; see `zot item template --help`")
 			}
 			if cmd.Bool("web") {
 				return errors.New("item template uses the local endpoint")
@@ -431,7 +432,7 @@ func itemPatchAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	key := cmd.Args().First()
 	if key == "" {
-		return errors.New("missing item key (usage: zot item patch <item-key>)")
+		return errors.New("missing item key; see `zot item patch --help`")
 	}
 	file := cmd.String("file")
 	fromStdin := file == ""
@@ -531,7 +532,7 @@ func itemDeleteAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	keys := cmd.Args().Slice()
 	if len(keys) == 0 {
-		return errors.New("missing item key(s) (usage: zot item delete <item-key>...)")
+		return errors.New("missing item key(s); see `zot item delete --help`")
 	}
 	if len(keys) > zotero.MaxDeleteObjects {
 		return fmt.Errorf("%d keys exceeds the %d-item delete limit", len(keys), zotero.MaxDeleteObjects)

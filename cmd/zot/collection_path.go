@@ -28,7 +28,7 @@ func collectionPathCommand() *cli.Command {
 func collectionPathAction(ctx context.Context, cmd *cli.Command) error {
 	keys := cmd.Args().Slice()
 	if len(keys) == 0 {
-		return errors.New("missing collection key (usage: zot collection path <collection-key>...)")
+		return errors.New("missing collection key; see `zot collection path --help`")
 	}
 	if len(keys) > maxCollectionPathKeys {
 		return fmt.Errorf("too many collection keys: got %d, maximum is %d", len(keys), maxCollectionPathKeys)

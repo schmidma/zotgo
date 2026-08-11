@@ -14,8 +14,9 @@ import (
 
 func collectionCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "collection",
-		Usage: "inspect collection paths or manage collections",
+		Name:        "collection",
+		Usage:       "inspect collection paths or manage collections",
+		Description: "Resolve ancestry with `zot collection path`, or create, rename, and delete collections with local writes. To browse the collection tree and keys, use the read-only `zot collections` command.",
 		Commands: []*cli.Command{
 			collectionPathCommand(),
 			collectionCreateCommand(),
@@ -45,7 +46,7 @@ func collectionCreateAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	name := cmd.Args().First()
 	if name == "" {
-		return errors.New("missing collection name (usage: zot collection create <name>)")
+		return errors.New("missing collection name; see `zot collection create --help`")
 	}
 	parent := cmd.String("parent")
 
@@ -117,7 +118,7 @@ func collectionRenameAction(ctx context.Context, cmd *cli.Command) error {
 	key := cmd.Args().Get(0)
 	name := cmd.Args().Get(1)
 	if key == "" || name == "" {
-		return errors.New("usage: zot collection rename <key> <new-name>")
+		return errors.New("missing collection key or new name; see `zot collection rename --help`")
 	}
 
 	c, lib, err := resolveLibrary(ctx, cmd)
@@ -183,7 +184,7 @@ func collectionDeleteAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	keys := cmd.Args().Slice()
 	if len(keys) == 0 {
-		return errors.New("missing collection key(s) (usage: zot collection delete <key>...)")
+		return errors.New("missing collection key(s); see `zot collection delete --help`")
 	}
 	if len(keys) > zotero.MaxDeleteObjects {
 		return fmt.Errorf("%d keys exceeds the %d-collection delete limit", len(keys), zotero.MaxDeleteObjects)

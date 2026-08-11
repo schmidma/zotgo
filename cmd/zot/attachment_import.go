@@ -75,11 +75,11 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	parentKey := strings.TrimSpace(cmd.String("parent"))
 	if parentKey == "" {
-		return errors.New("missing --parent item key")
+		return errors.New("missing --parent item key; see `zot attachment import --help`")
 	}
 	sourcePath := cmd.String("file")
 	if sourcePath == "" {
-		return errors.New("missing --file PDF path")
+		return errors.New("missing --file PDF path; see `zot attachment import --help`")
 	}
 	title := strings.TrimSpace(cmd.String("title"))
 	if title == "" {
