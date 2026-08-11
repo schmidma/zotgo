@@ -10,12 +10,26 @@ zot list --tag ml --tag review # items with all the given tags
 zot search "state estimation"  # search by title/creator/year
 zot search algae --everything  # include full text and notes
 zot show HRAC4E44              # one item with its attachments and notes
+zot attachment show ABCD1234   # attachment metadata and conservative file status
 zot collections               # collections as a tree (--flat for a list)
 zot stats                     # library-wide counts
 ```
 
 Global flags: `--library`/`-L` selects a group library (by name or id; default is
 My Library), and `--url` overrides the endpoint address.
+
+## Attachments
+
+`zot attachment show ATTACHMENT_KEY` reports the attachment's parent, title,
+link mode, media metadata, filename, URL, dates, tags, MD5/mtime metadata, and
+any enclosure Zotero advertised. It does not request file bytes or open Zotero's
+database.
+
+File status is deliberately conservative: `metadata-available` means Zotero
+advertised both a location and size metadata, while `location-advertised` means
+it advertised a location without size. `linked-unverified`, `unavailable`, and
+`unknown` likewise describe API metadata—not a portable filesystem existence
+check. `not-applicable` identifies URL-only attachments.
 
 ## Export
 

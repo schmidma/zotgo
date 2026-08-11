@@ -10,6 +10,8 @@ package zotero
 
 import (
 	"context"
+	"encoding/json"
+	"net/url"
 	"os"
 	"testing"
 )
@@ -73,6 +75,82 @@ func TestLiveGroupResolutionAndReads(t *testing.T) {
 		}
 	}
 	t.Logf("group %q (id %d): %d items total", g.Data.Name, g.ID, page.TotalResults)
+}
+
+func TestLiveAttachmentMatchesRawItem(t *testing.T) {
+	c := liveClient(t)
+	ctx := context.Background()
+
+	body, _, err := c.do(ctx, "/api/users/0/items", url.Values{"itemType": {"attachment"}, "limit": {"1"}})
+	if err != nil {
+		t.Fatalf("find attachment: %v", err)
+	}
+	var items []struct {
+		Key string `json:"key"`
+	}
+	if err := json.Unmarshal(body, &items); err != nil {
+		t.Fatalf("decode attachment search: %v", err)
+	}
+	if len(items) == 0 {
+		t.Skip("no attachments to exercise")
+	}
+	raw, err := c.RawItem(ctx, UserLibrary(), items[0].Key)
+	if err != nil {
+		t.Fatalf("RawItem: %v", err)
+	}
+	var envelope struct {
+		Key   string          `json:"key"`
+		Links map[string]Link `json:"links"`
+		Data  json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatalf("decode raw attachment envelope: %v", err)
+	}
+	attachment, err := (Envelope{Key: envelope.Key, Links: envelope.Links, Data: envelope.Data}).Attachment()
+	if err != nil {
+		t.Fatalf("Attachment: %v", err)
+	}
+	var expected struct {
+		ItemType    string          `json:"itemType"`
+		ParentItem  json.RawMessage `json:"parentItem"`
+		LinkMode    string          `json:"linkMode"`
+		ContentType string          `json:"contentType"`
+		Filename    string          `json:"filename"`
+		MD5         json.RawMessage `json:"md5"`
+		MTime       json.RawMessage `json:"mtime"`
+	}
+	if err := json.Unmarshal(envelope.Data, &expected); err != nil {
+		t.Fatalf("decode raw attachment data: %v", err)
+	}
+	parentKey, err := attachmentParentKey(expected.ParentItem)
+	if err != nil {
+		t.Fatalf("decode raw attachment parent: %v", err)
+	}
+	md5, err := nullableString(expected.MD5)
+	if err != nil {
+		t.Fatalf("decode raw attachment md5: %v", err)
+	}
+	mtime, err := nullableInt64(expected.MTime)
+	if err != nil {
+		t.Fatalf("decode raw attachment mtime: %v", err)
+	}
+	if expected.ItemType != "attachment" || attachment.Key != envelope.Key || attachment.ParentKey != parentKey || attachment.LinkMode != expected.LinkMode || attachment.ContentType != expected.ContentType || attachment.Filename != expected.Filename {
+		t.Fatal("typed attachment identity differs from raw attachment")
+	}
+	if (attachment.MD5 == nil) != (md5 == nil) || (attachment.MTime == nil) != (mtime == nil) {
+		t.Fatal("typed attachment nullable metadata differs from raw attachment")
+	}
+	if md5 != nil && *attachment.MD5 != *md5 {
+		t.Fatal("typed attachment md5 differs from raw attachment")
+	}
+	if mtime != nil && *attachment.MTime != *mtime {
+		t.Fatal("typed attachment mtime differs from raw attachment")
+	}
+	status := attachment.FileStatus()
+	if status.State == "" || status.Reason == "" {
+		t.Fatalf("empty file status: %#v", status)
+	}
+	t.Logf("checked attachment mode %s with conservative status %s", attachment.LinkMode, status.State)
 }
 
 func TestLiveNotFound(t *testing.T) {
