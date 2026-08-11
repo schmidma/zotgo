@@ -22,6 +22,7 @@ type Kind string
 const (
 	KindItem          Kind = "item"
 	KindItems         Kind = "items"
+	KindAttachment    Kind = "attachment"
 	KindRelation      Kind = "relation"
 	KindRelations     Kind = "relations"
 	KindAnnotation    Kind = "annotation"

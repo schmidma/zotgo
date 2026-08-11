@@ -23,9 +23,9 @@ for every command, so a script learns it once:
 }
 ```
 
-`kind` says what `data` holds: `items`, `item`, `relations`, `relation`,
-`annotations`, `annotation`, `notes`, `note`, `collections`, `collection`,
-`stats`, `health`, or `item-mutations`. A `health` document carries `endpoint`
+`kind` says what `data` holds: `items`, `item`, `attachment`, `relations`,
+`relation`, `annotations`, `annotation`, `notes`, `note`, `collections`,
+`collection`, `stats`, `health`, or `item-mutations`. A `health` document carries `endpoint`
 and `capabilities`, so a script can check for `write` support rather than assume
 it. `schema` is bumped only when a field changes meaning or disappears — new
 fields may appear at any time, so ignore the ones you don't know.
@@ -74,10 +74,29 @@ envelopes into one array without reshaping fields. For `note get`, it emits the
 single complete envelope. Raw shape and server order remain outside the stable
 contract.
 
+### Attachments
+
+`zot --json attachment show ATTACHMENT_KEY` emits one `attachment` record. It
+contains stable attachment metadata, nullable `md5`/`mtime`, a nullable
+`enclosure`, and `fileStatus` with a state and reason. JSONL emits the same record
+on one self-describing line.
+
+The status describes only API evidence:
+
+- `metadata-available` — Zotero advertised a location and size metadata.
+- `location-advertised` — Zotero advertised a location without size metadata.
+- `linked-unverified` — the linked file cannot be checked portably through the API.
+- `unavailable` — an imported attachment has no advertised location.
+- `not-applicable` — the attachment links to a URL rather than a managed file.
+- `unknown` — zotgo does not recognize the link mode.
+
+None of these states is a durable filesystem-existence assertion. `--raw`
+preserves the complete single-item envelope.
+
 ### No `version` field
 
-Items, collections, stable annotation records, and stable note records carry
-**no `version`**. A Zotero object version belongs to the endpoint that issued it,
+Items, collections, stable attachment records, stable annotation records, and
+stable note records carry **no `version`**. A Zotero object version belongs to the endpoint that issued it,
 and the Local API's has no meaning zotgo can promise:
 it is the *server* version, so it does not move when you edit an item locally
 without syncing, and the local write API replaces it with an unrelated local

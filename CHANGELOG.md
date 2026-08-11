@@ -20,6 +20,8 @@ Planned and outstanding work is tracked in the
   with stable JSON/JSONL output and complete Zotero envelopes under `--raw`.
 - `zot note list` shows body-free child-note metadata, and `zot note get`
   retrieves one explicitly requested note with its rich HTML.
+- `zot attachment show` reports stable attachment metadata and conservative
+  file status without opening Zotero's database or downloading the file.
 
 ## [0.6.0] - 2026-07-29
 
