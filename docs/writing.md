@@ -54,23 +54,27 @@ zot tag delete urgent                    # remove a tag from EVERY item (library
 `tag add`/`remove` edit one item's tags and preserve the rest; `tag delete`
 strips a tag from the whole library.
 
-## Managed PDF attachments
+## Managed attachments
 
 ```bash
 zot attachment import \
   --parent ITEMKEY \
-  --file paper.pdf \
-  --title "Full Text PDF" \
-  --source-url https://example.org/paper.pdf
+  --file figure.png \
+  --title "Figure 1" \
+  --source-url https://example.org/figure.png
 ```
 
-`attachment import` attaches one local PDF to an existing bibliographic parent.
+`attachment import` attaches one local file to an existing bibliographic parent.
 It creates `imported_file` metadata, uploads the bytes to Zotero, registers them
 as a Zotero-managed file, and then verifies the parent, title, source URL,
-filename, media type, MD5, and byte length. `--filename` overrides the
-local basename. `--source-url` is provenance stored on the attachment; zotgo
-does not download it. Imports are capped at 128 MiB while Zotero's current Local
-API receiver buffers each upload in memory before staging it to disk.
+filename, media type, MD5, and byte length. The media type is detected from the
+staged file's first 512 bytes; unrecognized formats use
+`application/octet-stream`. `--content-type` overrides detection when the user
+knows a more precise MIME type. File extensions do not determine the media type.
+`--filename` overrides the local basename. `--source-url` is provenance stored
+on the attachment; zotgo does not download it. Imports are capped at 128 MiB
+while Zotero's current Local API receiver buffers each upload in memory before
+staging it to disk.
 
 Before writing, zotgo checks the parent's direct attachments. An existing exact
 MD5 is a successful no-op unless `--allow-duplicate` is set. This check is

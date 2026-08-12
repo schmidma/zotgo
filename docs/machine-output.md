@@ -95,12 +95,15 @@ preserves the complete single-item envelope.
 
 ### Attachment imports
 
-`zot --json attachment import ...` emits one `attachment-import` record. JSONL
-emits the same self-describing record on one line. `status` is `planned`,
-`duplicate`, `imported`, `partial`, or `failed`; `stage` identifies the last
-completed phase. The record always contains parent key, filename, media type,
-size, and MD5. Attachment key, file status, focused verification, and structured
-failure are explicit nullable fields.
+After argument and preflight validation succeeds, `zot --json attachment import
+...` emits one `attachment-import` record. JSONL emits the same self-describing
+record on one line. Argument, source-file, target-library, parent, and capability
+validation errors are regular command errors and emit no record. `status` is
+`planned`, `duplicate`, `imported`, `partial`, or `failed`; `stage` identifies
+the last completed phase. The record always contains parent key, filename, media
+type, size, and MD5. The media type is detected from staged bytes unless an
+explicit `--content-type` overrides it. Attachment key, file status, focused
+verification, and structured failure are explicit nullable fields.
 
 Successful verification covers the parent relationship, managed storage, title,
 source URL, filename, media type, byte length, and checksum. A partial result

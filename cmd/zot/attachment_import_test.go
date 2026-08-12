@@ -17,11 +17,18 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/CameronBrooks11/zotgo/internal/zotero"
 )
 
 const testPDF = "%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
 
+var testPNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89")
+
 type importServerOptions struct {
+	content               []byte
+	filename              string
+	contentType           string
 	duplicate             bool
 	uploadStatus          int
 	registerStatus        int
@@ -44,10 +51,10 @@ type importServerState struct {
 	registered     bool
 }
 
-func writeTestPDF(t *testing.T) string {
+func writeAttachmentImportTestFile(t *testing.T, name string, content []byte) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "paper.pdf")
-	if err := os.WriteFile(path, []byte(testPDF), 0o600); err != nil {
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	mtime := time.UnixMilli(1700000000000)
@@ -57,10 +64,23 @@ func writeTestPDF(t *testing.T) string {
 	return path
 }
 
+func writeTestPDF(t *testing.T) string {
+	return writeAttachmentImportTestFile(t, "paper.pdf", []byte(testPDF))
+}
+
 func newAttachmentImportServer(t *testing.T, opts importServerOptions) (*httptest.Server, *importServerState) {
 	t.Helper()
+	if opts.content == nil {
+		opts.content = []byte(testPDF)
+	}
+	if opts.filename == "" {
+		opts.filename = "managed.pdf"
+	}
+	if opts.contentType == "" {
+		opts.contentType = "application/pdf"
+	}
 	state := &importServerState{}
-	checksumBytes := md5.Sum([]byte(testPDF))
+	checksumBytes := md5.Sum(opts.content)
 	checksum := hex.EncodeToString(checksumBytes[:])
 	const serverID = "SERVERID1234"
 	var baseURL string
@@ -89,7 +109,7 @@ func newAttachmentImportServer(t *testing.T, opts importServerOptions) (*httptes
 		data := map[string]any{
 			"key": key, "itemType": "attachment", "parentItem": "PARENT01",
 			"linkMode": "imported_file", "title": state.metadata["title"],
-			"contentType": "application/pdf", "filename": "managed.pdf",
+			"contentType": opts.contentType, "filename": opts.filename,
 			"url": state.metadata["url"], "tags": []any{},
 		}
 		links := map[string]any{}
@@ -106,7 +126,7 @@ func newAttachmentImportServer(t *testing.T, opts importServerOptions) (*httptes
 			}
 			links["enclosure"] = map[string]any{
 				"href": baseURL + "/api/users/0/items/" + key + "/file/view",
-				"type": "application/pdf", "title": "managed.pdf", "length": length,
+				"type": opts.contentType, "title": opts.filename, "length": length,
 			}
 		} else {
 			data["md5"] = nil
@@ -127,11 +147,11 @@ func newAttachmentImportServer(t *testing.T, opts importServerOptions) (*httptes
 			"key": "DUPL0001", "version": "",
 			"links": map[string]any{"enclosure": map[string]any{
 				"href": baseURL + "/api/users/0/items/DUPL0001/file/view",
-				"type": "application/pdf", "title": "existing.pdf", "length": len(testPDF),
+				"type": opts.contentType, "title": "existing.pdf", "length": len(opts.content),
 			}},
 			"data": map[string]any{
-				"itemType": "attachment", "parentItem": "PARENT01", "title": "Existing PDF",
-				"linkMode": "imported_file", "contentType": "application/pdf", "filename": "existing.pdf",
+				"itemType": "attachment", "parentItem": "PARENT01", "title": "Existing attachment",
+				"linkMode": "imported_file", "contentType": opts.contentType, "filename": "existing.pdf",
 				"tags": []any{}, "md5": checksum, "mtime": int64(1700000000000),
 			},
 		}})
@@ -161,7 +181,7 @@ func newAttachmentImportServer(t *testing.T, opts importServerOptions) (*httptes
 				t.Errorf("metadata create included %q: %#v", forbidden, item)
 			}
 		}
-		if item["parentItem"] != "PARENT01" || item["linkMode"] != "imported_file" {
+		if item["parentItem"] != "PARENT01" || item["linkMode"] != "imported_file" || item["contentType"] != opts.contentType {
 			t.Errorf("metadata = %#v", item)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -201,9 +221,12 @@ func newAttachmentImportServer(t *testing.T, opts importServerOptions) (*httptes
 			return
 		}
 		state.uploadForm = values
+		if values.Get("contentType") != opts.contentType {
+			t.Errorf("upload contentType = %q, want %q", values.Get("contentType"), opts.contentType)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"url": baseURL + "/api/local/uploads/UPLOADKEY", "uploadKey": "UPLOADKEY",
-			"contentType": "application/pdf", "prefix": "", "suffix": "",
+			"contentType": opts.contentType, "prefix": "", "suffix": "",
 		})
 	})
 	mux.HandleFunc("POST /api/local/uploads/UPLOADKEY", func(w http.ResponseWriter, r *http.Request) {
@@ -239,6 +262,60 @@ func importArgs(path string) []string {
 		"--json", "attachment", "import", "--parent", "PARENT01", "--file", path,
 		"--filename", "managed.pdf", "--title", "Full Text PDF",
 		"--source-url", "https://example.com/paper.pdf", "--yes",
+	}
+}
+
+func TestAttachmentImportPNGSuccess(t *testing.T) {
+	path := writeAttachmentImportTestFile(t, "source.png", testPNG)
+	saveImportTestKey(t)
+	srv, state := newAttachmentImportServer(t, importServerOptions{
+		content: testPNG, filename: "managed.png", contentType: "image/png",
+	})
+	defer srv.Close()
+	args := []string{
+		"--json", "attachment", "import", "--parent", "PARENT01", "--file", path,
+		"--filename", "managed.png", "--title", "Figure", "--yes",
+	}
+	out, _, err := runCLI(srv.URL, args...)
+	if err != nil {
+		t.Fatalf("PNG import: %v\n%s", err, out)
+	}
+	if state.metadata["contentType"] != "image/png" || state.uploadForm.Get("contentType") != "image/png" || string(state.uploaded) != string(testPNG) {
+		t.Fatalf("MIME propagation state = %#v", state)
+	}
+	if !strings.Contains(out, `"contentType": "image/png"`) || !strings.Contains(out, `"status": "imported"`) {
+		t.Fatalf("PNG output = %s", out)
+	}
+}
+
+func TestAttachmentImportContentTypeOverride(t *testing.T) {
+	path := writeAttachmentImportTestFile(t, "source.png", testPNG)
+	saveImportTestKey(t)
+	const override = "application/x-zotgo-image"
+	srv, state := newAttachmentImportServer(t, importServerOptions{
+		content: testPNG, filename: "managed.png", contentType: override,
+	})
+	defer srv.Close()
+	args := []string{
+		"--json", "attachment", "import", "--parent", "PARENT01", "--file", path,
+		"--filename", "managed.png", "--content-type", override, "--yes",
+	}
+	out, _, err := runCLI(srv.URL, args...)
+	if err != nil {
+		t.Fatalf("override import: %v\n%s", err, out)
+	}
+	if state.metadata["contentType"] != override || state.uploadForm.Get("contentType") != override || !strings.Contains(out, `"contentType": "`+override+`"`) {
+		t.Fatalf("override propagation state=%#v output=%s", state, out)
+	}
+}
+
+func TestAttachmentImportRejectsInvalidContentTypeBeforeIO(t *testing.T) {
+	path := writeAttachmentImportTestFile(t, "source.png", testPNG)
+	out, _, err := runCLI("http://127.0.0.1:1",
+		"--json", "attachment", "import", "--parent", "PARENT01", "--file", path,
+		"--content-type", "not a mime type", "--dry-run")
+	if err == nil || !strings.Contains(err.Error(), "invalid --content-type") {
+		t.Fatalf("error = %v, output = %s", err, out)
 	}
 }
 
@@ -512,50 +589,90 @@ func TestAttachmentImportRejectsRawAndMachineMutationWithoutYesBeforeIO(t *testi
 	}
 }
 
-func TestStageAttachmentPDFValidation(t *testing.T) {
-	t.Run("valid and override", func(t *testing.T) {
-		path := writeTestPDF(t)
-		staged, err := stageAttachmentPDF(path, "renamed.pdf")
+func TestStageAttachmentFileValidation(t *testing.T) {
+	t.Run("detects PNG despite filename", func(t *testing.T) {
+		path := writeAttachmentImportTestFile(t, "misleading.pdf", testPNG)
+		staged, err := stageAttachmentFile(path, "renamed.pdf", "")
 		if err != nil {
-			t.Fatalf("stageAttachmentPDF: %v", err)
+			t.Fatalf("stageAttachmentFile: %v", err)
 		}
 		defer staged.close()
-		if staged.filename != "renamed.pdf" || staged.size != int64(len(testPDF)) || len(staged.md5) != 32 || staged.mtime != 1700000000000 {
+		if staged.filename != "renamed.pdf" || staged.contentType != "image/png" || staged.size != int64(len(testPNG)) || len(staged.md5) != 32 || staged.mtime != 1700000000000 {
 			t.Fatalf("staged = %#v", staged)
 		}
 	})
-	for _, tt := range []struct {
-		name    string
-		content string
-		want    string
-	}{
-		{name: "empty", content: "", want: "empty"},
-		{name: "not pdf", content: "plain text", want: "not a PDF"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "paper.pdf")
-			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			_, err := stageAttachmentPDF(path, "")
-			if err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("error = %v, want %q", err, tt.want)
-			}
-		})
+	t.Run("explicit content type overrides and canonicalizes", func(t *testing.T) {
+		path := writeAttachmentImportTestFile(t, "image.png", testPNG)
+		staged, err := stageAttachmentFile(path, "", ` IMAGE/PNG; Profile="custom" `)
+		if err != nil {
+			t.Fatalf("stageAttachmentFile: %v", err)
+		}
+		defer staged.close()
+		if staged.contentType != "image/png; profile=custom" {
+			t.Fatalf("content type = %q", staged.contentType)
+		}
+	})
+	t.Run("unknown bytes use octet stream despite extension", func(t *testing.T) {
+		content := []byte{0x00, 0x01, 0x02, 0x03, 0xff}
+		path := writeAttachmentImportTestFile(t, "unknown.png", content)
+		staged, err := stageAttachmentFile(path, "", "")
+		if err != nil {
+			t.Fatalf("stageAttachmentFile: %v", err)
+		}
+		defer staged.close()
+		if staged.contentType != "application/octet-stream" {
+			t.Fatalf("content type = %q", staged.contentType)
+		}
+	})
+	for _, value := range []string{"not a mime", "foo", "image/", "image/*", "image/*+json", "foo/**", "text/plain; charset"} {
+		if _, err := stageAttachmentFile("/missing", "", value); err == nil || !strings.Contains(err.Error(), "invalid --content-type") {
+			t.Errorf("invalid content type %q: %v", value, err)
+		}
 	}
-	if _, err := stageAttachmentPDF(t.TempDir(), ""); err == nil || !strings.Contains(err.Error(), "regular file") {
+	empty := filepath.Join(t.TempDir(), "empty.bin")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stageAttachmentFile(empty, "", ""); err == nil || !strings.Contains(err.Error(), "empty") {
+		t.Fatalf("empty error = %v", err)
+	}
+	if _, err := stageAttachmentFile(t.TempDir(), "", ""); err == nil || !strings.Contains(err.Error(), "regular file") {
 		t.Fatalf("directory error = %v", err)
 	}
+	t.Run("missing source redacts path", func(t *testing.T) {
+		secretPath := filepath.Join(t.TempDir(), "private-source.bin")
+		_, err := stageAttachmentFile(secretPath, "", "")
+		if err == nil || strings.Contains(err.Error(), secretPath) || !strings.Contains(err.Error(), "unavailable") {
+			t.Fatalf("error = %v", err)
+		}
+	})
+	t.Run("oversized source", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "oversized.bin")
+		file, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Truncate(zotero.MaxAttachmentFileSize + 1); err != nil {
+			_ = file.Close()
+			t.Fatal(err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stageAttachmentFile(path, "", ""); err == nil || !strings.Contains(err.Error(), "safety limit") {
+			t.Fatalf("oversized error = %v", err)
+		}
+	})
 	for _, filename := range []string{
-		"../bad.pdf", "report?.pdf", "CON.pdf", "lpt9.PDF", "COM¹.pdf", "LPT³.txt",
-		"control\u007f.pdf", "control\u0085.pdf", "trailing. ", strings.Repeat("a", 252) + ".pdf",
+		"../bad.pdf", "report?.png", "CON.pdf", "lpt9.PNG", "COM¹.pdf", "LPT³.txt",
+		"control\u007f.pdf", "control\u0085.png", "trailing. ", strings.Repeat("a", 252) + ".pdf",
 	} {
 		if _, err := attachmentImportFilename("paper.pdf", filename); err == nil {
 			t.Errorf("invalid filename accepted: %q", filename)
 		}
 	}
-	for _, filename := range []string{"paper.pdf", "résumé.pdf", "data[final].pdf"} {
-		if got, err := attachmentImportFilename("source.pdf", filename); err != nil || got != filename {
+	for _, filename := range []string{"paper.pdf", "image.png", "résumé.txt", "data[final].bin"} {
+		if got, err := attachmentImportFilename("source.bin", filename); err != nil || got != filename {
 			t.Errorf("valid filename %q = %q, %v", filename, got, err)
 		}
 	}
@@ -596,7 +713,7 @@ func TestAttachmentImportCommandHelp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("help: %v", err)
 	}
-	for _, want := range []string{"--parent", "--file", "--source-url", "not downloaded", "Always Allow", "--dry-run", "--allow-duplicate"} {
+	for _, want := range []string{"local file", "MIME type is detected", "--parent", "--file", "--content-type", "--source-url", "not downloaded", "Always Allow", "--dry-run", "--allow-duplicate"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("help missing %q:\n%s", want, out)
 		}

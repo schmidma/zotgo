@@ -53,8 +53,8 @@ func TestLiveAttachmentImportRoundTrip(t *testing.T) {
 		}
 	}()
 
-	source := filepath.Join(t.TempDir(), "live-paper.pdf")
-	contents := []byte("%PDF-1.7\n% zotgo live attachment import\n%%EOF\n")
+	source := filepath.Join(t.TempDir(), "live-image.png")
+	contents := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89")
 	if err := os.WriteFile(source, contents, 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
@@ -65,8 +65,8 @@ func TestLiveAttachmentImportRoundTrip(t *testing.T) {
 
 	out, _, runErr := runCLI(client.BaseURL(),
 		"--json", "attachment", "import", "--parent", parentKey,
-		"--file", source, "--filename", "live-paper.pdf", "--title", "Live PDF",
-		"--source-url", "https://example.com/zotgo-live-paper.pdf", "--yes",
+		"--file", source, "--filename", "live-image.png", "--title", "Live PNG",
+		"--source-url", "https://example.com/zotgo-live-image.png", "--yes",
 	)
 	var doc struct {
 		Kind string `json:"kind"`
@@ -102,16 +102,17 @@ func TestLiveAttachmentImportRoundTrip(t *testing.T) {
 	}
 	var item struct {
 		Data struct {
-			ParentItem string `json:"parentItem"`
-			LinkMode   string `json:"linkMode"`
-			Filename   string `json:"filename"`
-			MD5        string `json:"md5"`
+			ParentItem  string `json:"parentItem"`
+			LinkMode    string `json:"linkMode"`
+			Filename    string `json:"filename"`
+			ContentType string `json:"contentType"`
+			MD5         string `json:"md5"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &item); err != nil {
 		t.Fatalf("decode imported attachment: %v", err)
 	}
-	if item.Data.ParentItem != parentKey || item.Data.LinkMode != "imported_file" || item.Data.Filename != "live-paper.pdf" || item.Data.MD5 == "" {
+	if item.Data.ParentItem != parentKey || item.Data.LinkMode != "imported_file" || item.Data.Filename != "live-image.png" || item.Data.ContentType != "image/png" || item.Data.MD5 == "" {
 		t.Fatalf("imported attachment data = %+v", item.Data)
 	}
 }

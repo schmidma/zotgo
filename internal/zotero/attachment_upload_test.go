@@ -54,7 +54,7 @@ func TestAttachmentUploadFullSequence(t *testing.T) {
 		}
 		calls = append(calls, "authorize")
 		want := map[string]string{
-			"md5": md5, "filename": "paper.pdf", "filesize": "26", "mtime": "1700000000000", "contentType": "application/pdf",
+			"md5": md5, "filename": "image.png", "filesize": "26", "mtime": "1700000000000", "contentType": "image/png",
 		}
 		for key, value := range want {
 			if values.Get(key) != value {
@@ -63,7 +63,7 @@ func TestAttachmentUploadFullSequence(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"url": baseURL + "/api/local/uploads/" + uploadKey, "uploadKey": uploadKey,
-			"contentType": "application/pdf", "prefix": "", "suffix": "",
+			"contentType": "image/png", "prefix": "", "suffix": "",
 		})
 	})
 	mux.HandleFunc("POST /api/local/uploads/"+uploadKey, func(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,7 @@ func TestAttachmentUploadFullSequence(t *testing.T) {
 	client := New(srv.URL)
 	client.SetLocalKey(apiKey)
 	metadata := AttachmentUploadMetadata{
-		MD5: md5, Filename: "paper.pdf", Size: int64(len(content)), MTime: 1700000000000, ContentType: "application/pdf",
+		MD5: md5, Filename: "image.png", Size: int64(len(content)), MTime: 1700000000000, ContentType: "image/png",
 	}
 	authorization, err := client.AuthorizeAttachmentUpload(context.Background(), UserLibrary(), "ATTACH01", metadata)
 	if err != nil {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
@@ -9,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,14 +24,13 @@ import (
 	"github.com/CameronBrooks11/zotgo/internal/zotero"
 )
 
-const attachmentImportContentType = "application/pdf"
-
 type stagedAttachment struct {
-	file     *os.File
-	filename string
-	size     int64
-	mtime    int64
-	md5      string
+	file        *os.File
+	filename    string
+	contentType string
+	size        int64
+	mtime       int64
+	md5         string
 }
 
 func (s *stagedAttachment) close() {
@@ -42,15 +42,17 @@ func (s *stagedAttachment) close() {
 func attachmentImportCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "import",
-		Usage: "attach a local PDF as a Zotero-managed file",
-		Description: "Creates an imported_file child, uploads the PDF through Zotero's Local API, and verifies managed metadata. " +
-			"--source-url stores provenance and is not downloaded. Managed imports are local-only, capped at 128 MiB, and require 'Always Allow' authorization.",
+		Usage: "attach a local file as a Zotero-managed file",
+		Description: "Creates an imported_file child, uploads the file through Zotero's Local API, and verifies managed metadata. " +
+			"The MIME type is detected from the staged bytes unless --content-type overrides it. --source-url stores provenance and is not downloaded. " +
+			"Managed imports are local-only, capped at 128 MiB, and require 'Always Allow' authorization.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "parent", Usage: "existing bibliographic parent item key"},
-			&cli.StringFlag{Name: "file", Usage: "local PDF path"},
-			&cli.StringFlag{Name: "title", Value: "Full Text PDF", Usage: "attachment title"},
+			&cli.StringFlag{Name: "file", Usage: "local file path"},
+			&cli.StringFlag{Name: "title", Value: "Attachment", Usage: "attachment title"},
 			&cli.StringFlag{Name: "source-url", Usage: "source/provenance URL stored on the attachment (not downloaded)"},
 			&cli.StringFlag{Name: "filename", Usage: "managed filename (default: local basename)"},
+			&cli.StringFlag{Name: "content-type", Usage: "MIME type override (default: detect from file bytes)"},
 			&cli.BoolFlag{Name: "allow-duplicate", Usage: "create another attachment even when this parent has the same MD5"},
 			&cli.BoolFlag{Name: "dry-run", Usage: "validate and show every planned phase without authorizing or writing"},
 			&cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: "skip confirmation"},
@@ -79,7 +81,7 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	sourcePath := cmd.String("file")
 	if sourcePath == "" {
-		return errors.New("missing --file PDF path; see `zot attachment import --help`")
+		return errors.New("missing --file path; see `zot attachment import --help`")
 	}
 	title := strings.TrimSpace(cmd.String("title"))
 	if title == "" {
@@ -89,7 +91,7 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 	if err := validateAttachmentSourceURL(sourceURL); err != nil {
 		return err
 	}
-	staged, err := stageAttachmentPDF(sourcePath, cmd.String("filename"))
+	staged, err := stageAttachmentFile(sourcePath, cmd.String("filename"), cmd.String("content-type"))
 	if err != nil {
 		return err
 	}
@@ -115,7 +117,7 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 
 	record := output.AttachmentImport{
 		Status: "planned", Stage: "preflight", ParentKey: parentKey,
-		Filename: staged.filename, ContentType: attachmentImportContentType,
+		Filename: staged.filename, ContentType: staged.contentType,
 		Size: staged.size, MD5: staged.md5,
 	}
 	if duplicate != nil && !cmd.Bool("allow-duplicate") {
@@ -149,7 +151,7 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 			"authorization-required", "managed import requires remembered Zotero authorization")
 	}
 
-	attachmentKey, err := createImportedAttachmentMetadata(ctx, client, library, parentKey, title, sourceURL)
+	attachmentKey, err := createImportedAttachmentMetadata(ctx, client, library, parentKey, title, sourceURL, staged.contentType)
 	if err != nil {
 		record.Status = "failed"
 		return finishAttachmentImportFailure(cmd, mode, output.NewLibrary(library), record,
@@ -161,7 +163,7 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 
 	metadata := zotero.AttachmentUploadMetadata{
 		MD5: staged.md5, Filename: staged.filename, Size: staged.size,
-		MTime: staged.mtime, ContentType: attachmentImportContentType,
+		MTime: staged.mtime, ContentType: staged.contentType,
 	}
 	authorization, err := client.AuthorizeAttachmentUpload(ctx, library, attachmentKey, metadata)
 	if err != nil {
@@ -173,7 +175,7 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 	if !authorization.Exists {
 		if _, err := staged.file.Seek(0, io.SeekStart); err != nil {
 			return finishAttachmentImportFailure(cmd, mode, output.NewLibrary(library), record,
-				"staged-file-failed", "could not rewind the staged PDF")
+				"staged-file-failed", "could not rewind the staged attachment")
 		}
 		if err := client.UploadAuthorizedAttachment(ctx, authorization, staged.file, staged.size); err != nil {
 			return finishAttachmentImportFailure(cmd, mode, output.NewLibrary(library), record,
@@ -223,15 +225,26 @@ func attachmentImportAction(ctx context.Context, cmd *cli.Command) error {
 	return emitAttachmentImport(cmd, mode, output.NewLibrary(library), record)
 }
 
-func stageAttachmentPDF(sourcePath, filenameOverride string) (*stagedAttachment, error) {
-	source, err := os.Open(sourcePath)
+func stageAttachmentFile(sourcePath, filenameOverride, contentTypeOverride string) (*stagedAttachment, error) {
+	contentTypeOverride, err := validateAttachmentContentType(contentTypeOverride)
 	if err != nil {
-		return nil, fmt.Errorf("open attachment source: %w", err)
+		return nil, err
+	}
+	pathInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return nil, errors.New("attachment source is unavailable")
+	}
+	if !pathInfo.Mode().IsRegular() {
+		return nil, errors.New("attachment source must be a regular file")
+	}
+	source, err := openAttachmentSource(sourcePath)
+	if err != nil {
+		return nil, errors.New("attachment source could not be opened")
 	}
 	defer source.Close()
 	before, err := source.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("inspect attachment source: %w", err)
+		return nil, errors.New("attachment source could not be inspected")
 	}
 	if !before.Mode().IsRegular() {
 		return nil, errors.New("attachment source must be a regular file")
@@ -260,12 +273,12 @@ func stageAttachmentPDF(sourcePath, filenameOverride string) (*stagedAttachment,
 	size, err := io.Copy(io.MultiWriter(staged, hash), io.LimitReader(source, zotero.MaxAttachmentFileSize+1))
 	if err != nil {
 		cleanup()
-		return nil, fmt.Errorf("stage attachment source: %w", err)
+		return nil, errors.New("attachment source could not be staged")
 	}
 	after, err := source.Stat()
 	if err != nil {
 		cleanup()
-		return nil, fmt.Errorf("reinspect attachment source: %w", err)
+		return nil, errors.New("attachment source could not be reinspected")
 	}
 	if size != before.Size() || size > zotero.MaxAttachmentFileSize || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) {
 		cleanup()
@@ -275,15 +288,15 @@ func stageAttachmentPDF(sourcePath, filenameOverride string) (*stagedAttachment,
 		cleanup()
 		return nil, fmt.Errorf("rewind staged attachment: %w", err)
 	}
-	header := make([]byte, 1024)
+	header := make([]byte, 512)
 	n, err := staged.Read(header)
 	if err != nil && !errors.Is(err, io.EOF) {
 		cleanup()
 		return nil, fmt.Errorf("inspect staged attachment: %w", err)
 	}
-	if !bytes.Contains(header[:n], []byte("%PDF-")) {
-		cleanup()
-		return nil, errors.New("attachment source is not a PDF")
+	contentType := http.DetectContentType(header[:n])
+	if contentTypeOverride != "" {
+		contentType = contentTypeOverride
 	}
 	if _, err := staged.Seek(0, io.SeekStart); err != nil {
 		cleanup()
@@ -295,9 +308,25 @@ func stageAttachmentPDF(sourcePath, filenameOverride string) (*stagedAttachment,
 		return nil, errors.New("attachment source modification time predates 1970")
 	}
 	return &stagedAttachment{
-		file: staged, filename: filename, size: size, mtime: mtime,
-		md5: hex.EncodeToString(hash.Sum(nil)),
+		file: staged, filename: filename, contentType: contentType,
+		size: size, mtime: mtime, md5: hex.EncodeToString(hash.Sum(nil)),
 	}, nil
+}
+
+func validateAttachmentContentType(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	mediaType, params, err := mime.ParseMediaType(value)
+	if err != nil {
+		return "", fmt.Errorf("invalid --content-type MIME type: %w", err)
+	}
+	typeName, subtype, ok := strings.Cut(mediaType, "/")
+	if !ok || typeName == "" || subtype == "" || strings.Contains(typeName, "*") || strings.Contains(subtype, "*") {
+		return "", errors.New("invalid --content-type MIME type: expected a concrete type/subtype")
+	}
+	return mime.FormatMediaType(mediaType, params), nil
 }
 
 func attachmentImportFilename(sourcePath, override string) (string, error) {
@@ -438,10 +467,10 @@ func ensureRememberedLocalKey(ctx context.Context, cmd *cli.Command, client *zot
 	return nil
 }
 
-func createImportedAttachmentMetadata(ctx context.Context, client *zotero.Client, library zotero.LibraryRef, parentKey, title, sourceURL string) (string, error) {
+func createImportedAttachmentMetadata(ctx context.Context, client *zotero.Client, library zotero.LibraryRef, parentKey, title, sourceURL, contentType string) (string, error) {
 	item := map[string]any{
 		"itemType": "attachment", "parentItem": parentKey,
-		"linkMode": "imported_file", "title": title, "contentType": attachmentImportContentType,
+		"linkMode": "imported_file", "title": title, "contentType": contentType,
 	}
 	if sourceURL != "" {
 		item["url"] = sourceURL
@@ -487,7 +516,7 @@ func verifyImportedAttachment(ctx context.Context, client *zotero.Client, librar
 		Title:          attachment.Title == title,
 		SourceURL:      attachment.URL == sourceURL,
 		Filename:       attachment.Filename == staged.filename,
-		ContentType:    attachment.ContentType == attachmentImportContentType,
+		ContentType:    attachment.ContentType == staged.contentType,
 		Size:           attachment.Enclosure != nil && attachment.Enclosure.Length != nil && *attachment.Enclosure.Length == staged.size,
 		Checksum:       attachment.MD5 != nil && strings.EqualFold(*attachment.MD5, staged.md5),
 	}

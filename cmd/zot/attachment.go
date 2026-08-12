@@ -17,7 +17,7 @@ func attachmentCommand() *cli.Command {
 	return &cli.Command{
 		Name:        "attachment",
 		Usage:       "inspect attachments or import managed files",
-		Description: "Use `attachment show` for API-reported metadata and file status, or `attachment import` to attach a local PDF as a Zotero-managed file. Managed imports are local-only.",
+		Description: "Use `attachment show` for API-reported metadata and file status, or `attachment import` to attach a local file as a Zotero-managed file. Managed imports are local-only.",
 		Commands: []*cli.Command{
 			attachmentShowCommand(),
 			attachmentImportCommand(),
