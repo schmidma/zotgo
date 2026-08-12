@@ -1,6 +1,7 @@
 package zotero
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -117,6 +118,18 @@ func (c *Client) Item(ctx context.Context, library LibraryRef, key string) (Enve
 	return item, err
 }
 
+// RawItem reads one item without decoding its Zotero-owned response fields.
+func (c *Client) RawItem(ctx context.Context, library LibraryRef, key string) (json.RawMessage, error) {
+	body, _, err := c.do(ctx, c.profile.LibraryPrefix(library)+"/items/"+url.PathEscape(key), nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRawJSONShape(body, '{', "item", "an object"); err != nil {
+		return nil, err
+	}
+	return json.RawMessage(body), nil
+}
+
 // Collection reads one collection by key.
 func (c *Client) Collection(ctx context.Context, library LibraryRef, key string) (Envelope, error) {
 	var col Envelope
@@ -129,6 +142,33 @@ func (c *Client) ItemChildren(ctx context.Context, library LibraryRef, key strin
 	var children []Envelope
 	page, err := c.getJSON(ctx, c.profile.LibraryPrefix(library)+"/items/"+url.PathEscape(key)+"/children", nil, &children)
 	return children, page, err
+}
+
+// RawItemChildren reads child items without decoding their Zotero-owned response fields.
+func (c *Client) RawItemChildren(ctx context.Context, library LibraryRef, key string) (json.RawMessage, error) {
+	body, _, err := c.do(ctx, c.profile.LibraryPrefix(library)+"/items/"+url.PathEscape(key)+"/children", nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRawJSONShape(body, '[', "child items", "an array"); err != nil {
+		return nil, err
+	}
+	return json.RawMessage(body), nil
+}
+
+func validateRawJSONShape(body []byte, first byte, label, want string) error {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return fmt.Errorf("decode %s: empty response body", label)
+	}
+	if trimmed[0] != first {
+		return fmt.Errorf("decode %s: expected %s", label, want)
+	}
+	var value json.RawMessage
+	if err := json.Unmarshal(trimmed, &value); err != nil {
+		return fmt.Errorf("decode %s: %w", label, err)
+	}
+	return nil
 }
 
 // Collections reads a single page of collections.

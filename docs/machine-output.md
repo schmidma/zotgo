@@ -5,7 +5,7 @@ Every command speaks three mutually exclusive machine formats.
 ```sh
 zot --json list       # one versioned document
 zot --jsonl list      # one self-describing document per line
-zot --raw list        # Zotero's own response, untouched
+zot --raw list        # unversioned Zotero-shaped response data
 ```
 
 ## `--json`
@@ -51,7 +51,16 @@ zot --jsonl list | jq -r '.data | "\(.key)\t\(.title)"'
 
 ## `--raw`
 
-`--raw` passes Zotero's API response straight through. It is an escape hatch for
-fields zotgo does not model, and it is **not covered by `schema`**: its shape is
-Zotero's and changes when Zotero changes. `stats` and `doctor` reject `--raw`,
-because zotgo derives them and there is no underlying Zotero response.
+`--raw` emits unversioned Zotero-shaped response data. It is an escape hatch
+outside the stable DTO contract and is **not covered by `schema`**; its exact
+shape and fidelity are command-specific. `show` preserves and combines its two
+complete responses so the item is at `.item`, the item fields are at
+`.item.data`, and complete child envelopes are in `.children`:
+
+```bash
+zot --raw show HRAC4E44 | jq '.item.data'
+zot --raw show HRAC4E44 | jq '.children[].data'
+```
+
+`stats` and `doctor` reject `--raw`, because zotgo derives them and there is no
+underlying Zotero response.

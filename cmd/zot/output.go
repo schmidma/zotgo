@@ -17,8 +17,8 @@ func outputMode(cmd *cli.Command) (output.Mode, error) {
 // emitSet writes a collection of records in the requested machine mode.
 //
 // plural names the whole set (--json), singular names one record (--jsonl).
-// raw is the untouched Zotero payload; pass nil when the command derives its
-// result and has none, and --raw will be refused rather than faked.
+// raw is unversioned Zotero-shaped response data; pass nil when the command
+// derives its result and has none, and --raw will be refused rather than faked.
 func emitSet[T any](w io.Writer, mode output.Mode, plural, singular output.Kind, lib *output.Library, records []T, shown, total int, raw any) error {
 	switch mode {
 	case output.ModeJSON:

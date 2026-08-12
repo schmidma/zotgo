@@ -17,12 +17,11 @@ const (
 	ModeJSON
 	// ModeJSONL emits one Document per record, newline-delimited.
 	ModeJSONL
-	// ModeRaw emits Zotero's own API payloads, unversioned and unshaped.
+	// ModeRaw emits unversioned Zotero-shaped response data.
 	ModeRaw
 )
 
-// ErrRawUnavailable means the command's result is derived by zotgo and has no
-// underlying Zotero payload to pass through.
+// ErrRawUnavailable means the command has no meaningful raw response data.
 var ErrRawUnavailable = errors.New("no raw Zotero response for this command")
 
 func (m Mode) String() string {
@@ -81,8 +80,8 @@ func WriteJSONL[T any](w io.Writer, kind Kind, library *Library, records []T) er
 	return nil
 }
 
-// WriteRaw emits a Zotero payload untouched apart from indentation. It is not
-// covered by SchemaVersion: the shape is Zotero's and changes when Zotero's does.
+// WriteRaw emits unversioned Zotero-shaped response data. Its fidelity and
+// composition are command-specific and it is not covered by SchemaVersion.
 func WriteRaw(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

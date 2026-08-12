@@ -326,7 +326,7 @@ func TestListRaw_KeepsZoteroVersion(t *testing.T) {
 	}
 }
 
-// --raw is the escape hatch: Zotero's own shape, untouched.
+// --raw is the escape hatch: Zotero's own top-level array and envelope fields.
 func TestListRaw(t *testing.T) {
 	srv := fakeZotero(true)
 	defer srv.Close()
@@ -430,31 +430,123 @@ func TestStatsJSON(t *testing.T) {
 func TestShowJSON(t *testing.T) {
 	srv := fakeZotero(true)
 	defer srv.Close()
-	out, _, err := runCLI(srv.URL, "--json", "show", "AAAA1111")
+	for _, mode := range []string{"--json", "--jsonl"} {
+		t.Run(mode, func(t *testing.T) {
+			out, _, err := runCLI(srv.URL, mode, "show", "AAAA1111")
+			if err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if mode == "--jsonl" && strings.Count(out, "\n") != 1 {
+				t.Fatalf("JSONL output = %q, want one line", out)
+			}
+			var doc struct {
+				Kind string `json:"kind"`
+				Data struct {
+					Key      string `json:"key"`
+					Children []struct {
+						Key  string `json:"key"`
+						Type string `json:"type"`
+					} `json:"children"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(out), &doc); err != nil {
+				t.Fatalf("not valid JSON: %v\n%s", err, out)
+			}
+			if doc.Kind != "item" {
+				t.Errorf("kind = %q, want item", doc.Kind)
+			}
+			if doc.Data.Key != "AAAA1111" {
+				t.Errorf("key = %q", doc.Data.Key)
+			}
+			if len(doc.Data.Children) != 1 || doc.Data.Children[0].Type != "attachment" {
+				t.Errorf("children = %+v", doc.Data.Children)
+			}
+		})
+	}
+}
+
+func TestShowRawRejectsInvalidResponseShapes(t *testing.T) {
+	tests := []struct {
+		name     string
+		item     string
+		children string
+		want     string
+	}{
+		{name: "item array", item: `[]`, children: `[]`, want: "decode item: expected an object"},
+		{name: "item malformed", item: `{`, children: `[]`, want: "decode item: unexpected end"},
+		{name: "children object", item: `{}`, children: `{}`, want: "decode child items: expected an array"},
+		{name: "children malformed", item: `{}`, children: `[`, want: "decode child items: unexpected end"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/users/0/items/AAAA1111", func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tt.item))
+			})
+			mux.HandleFunc("GET /api/users/0/items/AAAA1111/children", func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tt.children))
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+			out, _, err := runCLI(srv.URL, "--raw", "show", "AAAA1111")
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want containing %q", err, tt.want)
+			}
+			if out != "" {
+				t.Fatalf("partial raw output = %q", out)
+			}
+		})
+	}
+}
+
+func TestShowRawComposesLosslessEnvelopes(t *testing.T) {
+	mux := http.NewServeMux()
+	const itemFixture = "{\n  \"key\":\"AAAA1111\",\n  \"futureEnvelope\":{\"kept\":true},\n  \"data\":{\"itemType\":\"journalArticle\",\"title\":\"<&>\",\"futureItem\":7}\n}"
+	const childrenFixture = "[\n {\"key\":\"CHILD001\",\"futureChildEnvelope\":\"kept\",\"data\":{\"itemType\":\"attachment\",\"futureChildData\":9}}\n]"
+	mux.HandleFunc("GET /api/users/0/items/AAAA1111", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(itemFixture))
+	})
+	mux.HandleFunc("GET /api/users/0/items/AAAA1111/children", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(childrenFixture))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	out, _, err := runCLI(srv.URL, "--raw", "show", "AAAA1111")
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	var doc struct {
-		Kind string `json:"kind"`
-		Data struct {
-			Key      string `json:"key"`
-			Children []struct {
-				Key  string `json:"key"`
-				Type string `json:"type"`
-			} `json:"children"`
-		} `json:"data"`
+	wantOutput := "{\"item\":" + itemFixture + ",\"children\":" + childrenFixture + "}\n"
+	if out != wantOutput {
+		t.Fatalf("raw response bytes changed:\ngot:  %q\nwant: %q", out, wantOutput)
 	}
-	if err := json.Unmarshal([]byte(out), &doc); err != nil {
-		t.Fatalf("not valid JSON: %v\n%s", err, out)
+	var raw struct {
+		Item     map[string]json.RawMessage   `json:"item"`
+		Children []map[string]json.RawMessage `json:"children"`
 	}
-	if doc.Kind != "item" {
-		t.Errorf("kind = %q, want item", doc.Kind)
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		t.Fatalf("not valid raw JSON: %v\n%s", err, out)
 	}
-	if doc.Data.Key != "AAAA1111" {
-		t.Errorf("key = %q", doc.Data.Key)
+	if len(raw.Item) != 3 || len(raw.Children) != 1 || len(raw.Children[0]) != 3 {
+		t.Fatalf("raw wrapper = %#v", raw)
 	}
-	if len(doc.Data.Children) != 1 || doc.Data.Children[0].Type != "attachment" {
-		t.Errorf("children = %+v", doc.Data.Children)
+	var futureEnvelope map[string]bool
+	if err := json.Unmarshal(raw.Item["futureEnvelope"], &futureEnvelope); err != nil || !futureEnvelope["kept"] {
+		t.Fatalf("unknown item envelope field was not preserved: %s", out)
+	}
+	var futureChildEnvelope string
+	if err := json.Unmarshal(raw.Children[0]["futureChildEnvelope"], &futureChildEnvelope); err != nil || futureChildEnvelope != "kept" {
+		t.Fatalf("unknown child envelope field was not preserved: %s", out)
+	}
+	var itemData, childData map[string]json.RawMessage
+	if err := json.Unmarshal(raw.Item["data"], &itemData); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw.Children[0]["data"], &childData); err != nil {
+		t.Fatal(err)
+	}
+	if string(itemData["futureItem"]) != "7" || string(childData["futureChildData"]) != "9" {
+		t.Fatalf("unknown data fields were not preserved: %s", out)
 	}
 }
 
