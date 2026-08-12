@@ -98,4 +98,12 @@ so zotgo exports them only when the result fits in one page rather than emitting
 document with two roots; narrow the query with `-c`/`-t` if you hit that.
 
 For scripting the output of any read command, see
-[machine-readable output](machine-output.md).
+[machine-readable output](machine-output.md). In particular, `show` uses
+`.data` for its stable shaped item and `.item.data` for the complete raw Zotero
+fields:
+
+```bash
+zot --json show HRAC4E44 | jq '.data'
+zot --raw show HRAC4E44 | jq '.item.data'
+zot --raw show HRAC4E44 | jq '.children[].data'
+```

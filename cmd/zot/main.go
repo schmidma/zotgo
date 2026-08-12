@@ -85,7 +85,7 @@ func rootCommand() *cli.Command {
 			},
 			&cli.BoolFlag{
 				Name:  "raw",
-				Usage: "emit Zotero's own API response, unshaped and unversioned",
+				Usage: "emit unversioned Zotero-shaped response data",
 			},
 		},
 		Commands: discoveryCommands(),
