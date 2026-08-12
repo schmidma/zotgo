@@ -14,6 +14,9 @@ Planned and outstanding work is tracked in the
 
 - `zot attachment show` reports stable attachment metadata and conservative
   file status without opening Zotero's database or downloading the file.
+- `zot attachment import` creates an `imported_file` child, detects or accepts
+  an explicit MIME type, uploads a local file through Zotero's managed-file
+  protocol, and verifies the stored metadata.
 
 ## [0.6.0] - 2026-07-29
 

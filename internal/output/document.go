@@ -20,13 +20,14 @@ const SchemaVersion = 2
 type Kind string
 
 const (
-	KindItem        Kind = "item"
-	KindItems       Kind = "items"
-	KindAttachment  Kind = "attachment"
-	KindCollection  Kind = "collection"
-	KindCollections Kind = "collections"
-	KindStats       Kind = "stats"
-	KindHealth      Kind = "health"
+	KindItem             Kind = "item"
+	KindItems            Kind = "items"
+	KindAttachment       Kind = "attachment"
+	KindAttachmentImport Kind = "attachment-import"
+	KindCollection       Kind = "collection"
+	KindCollections      Kind = "collections"
+	KindStats            Kind = "stats"
+	KindHealth           Kind = "health"
 )
 
 // Document is the envelope wrapping every machine-readable response.

@@ -43,6 +43,13 @@ type ItemsOptions struct {
 	ItemKeys []string
 }
 
+// ChildrenOptions controls filtered child-item reads.
+type ChildrenOptions struct {
+	ItemType string
+	Limit    int
+	Start    int
+}
+
 // CollectionsOptions controls collection-list requests.
 type CollectionsOptions struct {
 	Top   bool
@@ -133,11 +140,68 @@ func (c *Client) Collection(ctx context.Context, library LibraryRef, key string)
 	return col, err
 }
 
-// ItemChildren reads attachments and notes under a parent item.
+// ItemChildren reads the first page of attachments and notes under a parent item.
 func (c *Client) ItemChildren(ctx context.Context, library LibraryRef, key string) ([]Envelope, Page, error) {
+	return c.ChildItems(ctx, library, key, ChildrenOptions{})
+}
+
+// ChildItems reads one filtered page of child items.
+func (c *Client) ChildItems(ctx context.Context, library LibraryRef, key string, opts ChildrenOptions) ([]Envelope, Page, error) {
 	var children []Envelope
-	page, err := c.getJSON(ctx, c.profile.LibraryPrefix(library)+"/items/"+url.PathEscape(key)+"/children", nil, &children)
+	page, err := c.getJSON(ctx, childItemsPath(c.profile, library, key), childrenValues(opts), &children)
 	return children, page, err
+}
+
+// AllRawChildItems follows pagination while preserving each Zotero item envelope.
+func (c *Client) AllRawChildItems(ctx context.Context, library LibraryRef, key string, opts ChildrenOptions) ([]json.RawMessage, error) {
+	all := make([]json.RawMessage, 0)
+	for {
+		body, page, err := c.do(ctx, childItemsPath(c.profile, library, key), childrenValues(opts))
+		if err != nil {
+			return nil, err
+		}
+		trimmed := strings.TrimSpace(string(body))
+		if trimmed == "" {
+			return nil, errors.New("decode child items: empty response body")
+		}
+		if trimmed[0] != '[' {
+			return nil, errors.New("decode child items: expected a JSON array")
+		}
+		children := make([]json.RawMessage, 0)
+		if err := json.Unmarshal([]byte(trimmed), &children); err != nil {
+			return nil, fmt.Errorf("decode child items: %w", err)
+		}
+		all = append(all, children...)
+		start, more, err := nextStart(page.NextURL, opts.Start)
+		if err != nil {
+			return nil, err
+		}
+		if !more {
+			return all, nil
+		}
+		if err := c.honorBackoff(ctx, page); err != nil {
+			return nil, err
+		}
+		opts.Start = start
+	}
+}
+
+func childItemsPath(profile Profile, library LibraryRef, key string) string {
+	return profile.LibraryPrefix(library) + "/items/" + url.PathEscape(key) + "/children"
+}
+
+func childrenValues(opts ChildrenOptions) url.Values {
+	values := make(url.Values)
+	if opts.ItemType != "" {
+		values.Set("itemType", opts.ItemType)
+	}
+	if opts.Limit > 0 {
+		values.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	if opts.Start > 0 {
+		values.Set("start", strconv.Itoa(opts.Start))
+	}
+	return values
 }
 
 // Collections reads a single page of collections.

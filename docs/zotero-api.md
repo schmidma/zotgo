@@ -9,7 +9,7 @@ Zotero (client `9.0.4`, Local API v3, schema 42, `~8784047` user, 13 groups,
 The two surfaces:
 
 | Surface | Path prefix | Purpose | Default state |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Local API** (read) | `/api/*` | read library data, server-side export | **OFF by default** (`httpServer.localAPI.enabled`) |
 | **Connector API** (write) | `/connector/*` | create items/attachments, snapshots | on whenever Zotero runs |
 
@@ -179,6 +179,7 @@ release**: Zotero 9.0.4 does not have it, so per the iron rule zotgo cannot ship
 writes until we can run against a Zotero built with these commits.
 
 **Endpoints & methods** (mirror Web API v3 write semantics):
+
 - `POST /api/local/authorize` — obtain a **local API key** (local-only; no web
   analog). Body `{"appName":"zotgo"}` → Zotero modal (Allow / Always Allow /
   Deny). 200 `{"key":"<key>","remember":<bool>}`; 403 `{"denied":true}`; 400 if
@@ -191,6 +192,7 @@ writes until we can run against a Zotero built with these commits.
 - `MAX_WRITE_OBJECTS = 50`, `MAX_DELETE_OBJECTS = 50`.
 
 **Auth & headers:**
+
 - Writes require the local API key via `Zotero-API-Key` (or `?key=`); missing/bad
   → 401.
 - **`Zotero-Server-ID`**: a stable per-database id on **every** response.
@@ -202,9 +204,28 @@ writes until we can run against a Zotero built with these commits.
   `If-Modified-Since-Version` gate reads. `Last-Modified-Version` on responses.
 
 **Response shapes** (identical to Web API v3, so the parser is shared):
+
 - Batch → 200 `{"successful":{"<i>":<obj>}, "success":{…}, "unchanged":{"<i>":"<key>"},
   "failed":{"<i>":{"key","code","message"}}}`.
-- Single `PUT`/`PATCH`/`DELETE` → 204. File registration → 201.
+- Single `PUT`/`PATCH`/`DELETE` → 204. File registration → 204.
+
+**Managed attachment files** use the API-v3 full-upload contract for an existing
+`imported_file` or `imported_url` attachment. The client first creates attachment
+metadata without `filename`/`path`/`md5`/`mtime`, then:
+
+1. `POST /api/…/items/:key/file` with form-encoded MD5, bare filename, byte
+   length, millisecond mtime, media type, and `If-None-Match: *`.
+2. Stream the bytes to the returned same-origin `/api/local/uploads/:uploadKey`
+   receiver; this key-scoped request carries no API credential.
+3. Repeat the authenticated form POST with `upload=:uploadKey` and the same
+   precondition to register the staged file.
+
+The receiver verifies MD5 but not the claimed byte length. A focused item read
+must verify the parent, `imported_file` link mode, filename, MD5, and advertised
+enclosure length. zotgo caps imports at 128 MiB because the current Local API
+receiver buffers each request in memory before staging it to disk. Registration returns 204. This deterministic Local
+API workflow is distinct from Connector ingestion and can target an arbitrary
+existing bibliographic parent.
 
 **Versioning is endpoint-scoped, in Zotero's own words:** *"Local API versions
 have no relation to Web API versions, nor … to local API versions returned by
@@ -275,10 +296,10 @@ snapshots). General resource writes belong on the official API write contract.
 - **Session model**: every write flow generates a client `sessionID` and threads
   it through save → recognize → updateSession.
 - **Existing-item attachments/collection assignment**: connector attachment and
-  session-update operations are session-bound. Attaching a file to an arbitrary
-  pre-existing item, or assigning an arbitrary existing item to a collection,
-  was handled in pyzot with direct SQLite writes. zotgo rejects that path; these
-  capabilities are out of scope unless Zotero exposes an API for them.
+  session-update operations are session-bound, so Connector remains unsuitable
+  for arbitrary existing items. Managed attachment files now use the Local API
+  upload contract above. Arbitrary collection assignment still needs an API
+  contract rather than direct SQLite writes.
 
 ---
 
