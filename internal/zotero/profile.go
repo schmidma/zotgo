@@ -70,6 +70,9 @@ const (
 	// CapabilityWrite is creating, updating, or deleting objects through the
 	// official API write contract.
 	CapabilityWrite Capability = "write"
+	// CapabilityManagedFileUpload is deterministic Local API storage upload for
+	// an existing imported attachment item.
+	CapabilityManagedFileUpload Capability = "managed-file-upload"
 	// CapabilityConnectorIngest is app-mediated ingestion over /connector/*:
 	// PDF recognition, file import, snapshots.
 	CapabilityConnectorIngest Capability = "connector-ingest"
@@ -117,16 +120,22 @@ func (h Health) Capabilities() []CapabilityStatus {
 func (h Health) localCapabilities() []CapabilityStatus {
 	blocked := h.localAPIUnavailable()
 
-	caps := []CapabilityStatus{
+	upload := h.localWriteCapability(blocked)
+	upload.Name = CapabilityManagedFileUpload
+	if upload.Reason != "" && blocked == "" {
+		upload.Reason = "this Zotero build has no Local API managed-file upload (update Zotero once a release with zotero/zotero#5015 ships)"
+	}
+	connector := CapabilityStatus{Name: CapabilityConnectorIngest, Supported: h.ZoteroRunning}
+	if !h.ZoteroRunning {
+		connector.Reason = "Zotero is not running"
+	}
+	return []CapabilityStatus{
 		{Name: CapabilityRead, Supported: blocked == "", Reason: blocked},
 		h.localWriteCapability(blocked),
-		{Name: CapabilityConnectorIngest, Supported: h.ZoteroRunning},
+		upload,
+		connector,
 		{Name: CapabilityLocalFileAccess, Supported: blocked == "", Reason: blocked},
 	}
-	if !h.ZoteroRunning {
-		caps[2].Reason = "Zotero is not running"
-	}
-	return caps
 }
 
 // localWriteCapability is now probe-derived: the Local API returns a
@@ -178,6 +187,7 @@ func (h Health) webCapabilities() []CapabilityStatus {
 	return []CapabilityStatus{
 		{Name: CapabilityRead, Supported: canRead, Reason: readReason},
 		{Name: CapabilityWrite, Supported: canWrite, Reason: writeReason},
+		{Name: CapabilityManagedFileUpload, Supported: false, Reason: "managed-file upload needs a local Zotero"},
 		{Name: CapabilityConnectorIngest, Supported: false, Reason: "Connector ingestion needs a local Zotero; the Web API has no equivalent"},
 		{Name: CapabilityLocalFileAccess, Supported: false, Reason: "resolving attachments to local files needs a local Zotero"},
 	}
