@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -120,6 +122,64 @@ func TestParsePatchInput(t *testing.T) {
 		if _, err := parsePatchInput([]byte(in)); err == nil {
 			t.Errorf("%s should error", name)
 		}
+	}
+}
+
+func TestValidateItemPatchSafety(t *testing.T) {
+	tests := []struct {
+		name    string
+		item    string
+		patch   string
+		wantErr bool
+	}{
+		{name: "managed file filename", item: `{"key":"ATTACH01","data":{"itemType":"attachment","linkMode":"imported_file","filename":"old.pdf","tags":[],"md5":null,"mtime":null}}`, patch: `{"filename":"new.pdf"}`, wantErr: true},
+		{name: "managed URL filename", item: `{"key":"ATTACH01","data":{"itemType":"attachment","linkMode":"imported_url","filename":"old.pdf","tags":[],"md5":null,"mtime":null}}`, patch: `{"filename":"new.pdf"}`, wantErr: true},
+		{name: "managed title", item: `{"key":"ATTACH01","data":{"itemType":"attachment","linkMode":"imported_file","filename":"old.pdf","tags":[],"md5":null,"mtime":null}}`, patch: `{"title":"New title"}`},
+		{name: "linked file filename", item: `{"key":"ATTACH01","data":{"itemType":"attachment","linkMode":"linked_file","filename":"old.pdf","tags":[],"md5":null,"mtime":null}}`, patch: `{"filename":"new.pdf"}`},
+		{name: "bibliographic filename", item: `{"key":"ITEM0001","data":{"itemType":"journalArticle","title":"Paper"}}`, patch: `{"filename":"ignored.pdf"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var item zotero.Envelope
+			if err := json.Unmarshal([]byte(tt.item), &item); err != nil {
+				t.Fatalf("decode item: %v", err)
+			}
+			err := validateItemPatchSafety(item, json.RawMessage(tt.patch))
+			if tt.wantErr && (err == nil || !strings.Contains(err.Error(), "without renaming the stored file")) {
+				t.Fatalf("error = %v", err)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func TestItemPatchRejectsManagedFilenameBeforeWrite(t *testing.T) {
+	t.Setenv("ZOTGO_CONFIG_DIR", t.TempDir())
+	var requests []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/users/0/items/ATTACH01", func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.Method+" "+r.URL.Path)
+		_, _ = w.Write([]byte(`{"key":"ATTACH01","version":7,"data":{"itemType":"attachment","linkMode":"imported_file","filename":"old.pdf","tags":[],"md5":null,"mtime":null}}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.Method+" "+r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	patchFile := filepath.Join(t.TempDir(), "patch.json")
+	if err := os.WriteFile(patchFile, []byte(`{"filename":"new.pdf"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err := runCLI(srv.URL, "item", "patch", "ATTACH01", "--file", patchFile, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "without renaming the stored file") {
+		t.Fatalf("error = %v", err)
+	}
+	if stdout != "" || strings.Join(requests, ",") != "GET /api/users/0/items/ATTACH01" {
+		t.Fatalf("stdout = %q, requests = %v", stdout, requests)
 	}
 }
 
