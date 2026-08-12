@@ -460,6 +460,9 @@ func itemPatchAction(ctx context.Context, cmd *cli.Command) error {
 		}
 		return friendly(err)
 	}
+	if err := validateItemPatchSafety(item, patch); err != nil {
+		return err
+	}
 
 	w := out(cmd)
 	fields := patchFields(patch)
@@ -639,6 +642,26 @@ func parsePatchInput(raw []byte) (json.RawMessage, error) {
 		return nil, errors.New("the patch is empty")
 	}
 	return json.RawMessage(trimmed), nil
+}
+
+func validateItemPatchSafety(item zotero.Envelope, patch json.RawMessage) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(patch, &fields); err != nil {
+		return fmt.Errorf("decode patch fields: %w", err)
+	}
+	if _, changesFilename := fields["filename"]; !changesFilename || item.ItemType() != "attachment" {
+		return nil
+	}
+	var attachment struct {
+		LinkMode string `json:"linkMode"`
+	}
+	if err := json.Unmarshal(item.Data, &attachment); err != nil {
+		return fmt.Errorf("inspect attachment before patch: %w", err)
+	}
+	if attachment.LinkMode == "imported_file" || attachment.LinkMode == "imported_url" {
+		return errors.New("filename cannot be patched for a Zotero-managed attachment: Zotero's generic item update changes metadata without renaming the stored file")
+	}
+	return nil
 }
 
 // patchFields lists the field names a patch will set, in a stable order.
