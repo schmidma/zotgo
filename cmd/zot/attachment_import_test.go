@@ -340,8 +340,12 @@ func TestAttachmentImportJSONSuccess(t *testing.T) {
 			FileStatus    struct {
 				State string `json:"state"`
 			} `json:"fileStatus"`
-			Verification map[string]bool `json:"verification"`
-			Failure      any             `json:"failure"`
+			Verification struct {
+				Parent, ManagedStorage, Title, SourceURL bool
+				Filename, ContentType, Size, Checksum    bool
+				ActualFilename                           string `json:"actualFilename"`
+			} `json:"verification"`
+			Failure any `json:"failure"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
@@ -353,10 +357,9 @@ func TestAttachmentImportJSONSuccess(t *testing.T) {
 	if doc.Data.FileStatus.State != "metadata-available" || doc.Data.Failure != nil {
 		t.Fatalf("status/failure = %#v / %#v", doc.Data.FileStatus, doc.Data.Failure)
 	}
-	for check, ok := range doc.Data.Verification {
-		if !ok {
-			t.Errorf("verification %s = false", check)
-		}
+	v := doc.Data.Verification
+	if !v.Parent || !v.ManagedStorage || !v.Title || !v.SourceURL || !v.Filename || !v.ContentType || !v.Size || !v.Checksum || v.ActualFilename != "managed.pdf" {
+		t.Fatalf("verification = %#v", v)
 	}
 	if state.writes != 1 || state.uploads != 1 || state.registrations != 1 || string(state.uploaded) != testPDF {
 		t.Fatalf("state = %#v", state)

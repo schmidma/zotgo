@@ -63,9 +63,10 @@ func TestLiveAttachmentImportRoundTrip(t *testing.T) {
 		t.Fatalf("set source mtime: %v", err)
 	}
 
+	const managedFilename = "live image+résumé 100%.png"
 	out, _, runErr := runCLI(client.BaseURL(),
 		"--json", "attachment", "import", "--parent", parentKey,
-		"--file", source, "--filename", "live-image.png", "--title", "Live PNG",
+		"--file", source, "--filename", managedFilename, "--title", "Live PNG",
 		"--source-url", "https://example.com/zotgo-live-image.png", "--yes",
 	)
 	var doc struct {
@@ -112,7 +113,7 @@ func TestLiveAttachmentImportRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(raw, &item); err != nil {
 		t.Fatalf("decode imported attachment: %v", err)
 	}
-	if item.Data.ParentItem != parentKey || item.Data.LinkMode != "imported_file" || item.Data.Filename != "live-image.png" || item.Data.ContentType != "image/png" || item.Data.MD5 == "" {
+	if item.Data.ParentItem != parentKey || item.Data.LinkMode != "imported_file" || item.Data.Filename != managedFilename || item.Data.ContentType != "image/png" || item.Data.MD5 == "" {
 		t.Fatalf("imported attachment data = %+v", item.Data)
 	}
 }

@@ -519,6 +519,7 @@ func verifyImportedAttachment(ctx context.Context, client *zotero.Client, librar
 		ContentType:    attachment.ContentType == staged.contentType,
 		Size:           attachment.Enclosure != nil && attachment.Enclosure.Length != nil && *attachment.Enclosure.Length == staged.size,
 		Checksum:       attachment.MD5 != nil && strings.EqualFold(*attachment.MD5, staged.md5),
+		ActualFilename: attachment.Filename,
 	}
 	if verification.OK() {
 		return attachment, verification, nil

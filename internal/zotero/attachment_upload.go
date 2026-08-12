@@ -146,6 +146,13 @@ func (c *Client) RegisterAttachmentUpload(ctx context.Context, library LibraryRe
 	return nil
 }
 
+// attachmentFileFormEncode emits RFC 3986-style spaces for compatibility with
+// Zotero's Local API parser. Values.Encode has already escaped literal plus
+// signs as %2B, so replacing its space markers cannot alter filename plus signs.
+func attachmentFileFormEncode(values url.Values) string {
+	return strings.ReplaceAll(values.Encode(), "+", "%20")
+}
+
 func (c *Client) attachmentFileFormRequest(ctx context.Context, library LibraryRef, attachmentKey string, values url.Values) (int, []byte, error) {
 	if c.profile.Kind != EndpointLocal {
 		return 0, nil, errors.New("managed attachment uploads are local-only")
@@ -156,7 +163,7 @@ func (c *Client) attachmentFileFormRequest(ctx context.Context, library LibraryR
 	if err := c.ensureServerID(ctx); err != nil {
 		return 0, nil, err
 	}
-	body := strings.NewReader(values.Encode())
+	body := strings.NewReader(attachmentFileFormEncode(values))
 	path := c.profile.LibraryPrefix(library) + "/items/" + url.PathEscape(attachmentKey) + "/file"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.profile.BaseURL+path, body)
 	if err != nil {

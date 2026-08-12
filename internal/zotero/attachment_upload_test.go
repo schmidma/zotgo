@@ -111,6 +111,30 @@ func TestAttachmentUploadFullSequence(t *testing.T) {
 	}
 }
 
+func TestAttachmentFileFormEncode(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		want     string
+	}{
+		{name: "space", filename: "Example Paper.pdf", want: "Example%20Paper.pdf"},
+		{name: "literal plus", filename: "Example+Paper.pdf", want: "Example%2BPaper.pdf"},
+		{name: "Unicode", filename: "résumé 文献.pdf", want: "r%C3%A9sum%C3%A9%20%E6%96%87%E7%8C%AE.pdf"},
+		{name: "percent and reserved", filename: "100% [final]&notes.pdf", want: "100%25%20%5Bfinal%5D%26notes.pdf"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded := attachmentFileFormEncode(url.Values{"filename": {tt.filename}})
+			if encoded != "filename="+tt.want {
+				t.Fatalf("encoded form = %q, want %q", encoded, "filename="+tt.want)
+			}
+			if strings.Contains(encoded, "+") {
+				t.Fatalf("encoded form contains an ambiguous plus: %q", encoded)
+			}
+		})
+	}
+}
+
 func TestAuthorizeAttachmentUploadExists(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, _ *http.Request) {

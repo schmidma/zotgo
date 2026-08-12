@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -39,6 +40,7 @@ func TestAttachmentImportVerificationOK(t *testing.T) {
 	verified := AttachmentImportVerification{
 		Parent: true, ManagedStorage: true, Title: true, SourceURL: true,
 		Filename: true, ContentType: true, Size: true, Checksum: true,
+		ActualFilename: "Example Paper.pdf",
 	}
 	if !verified.OK() {
 		t.Fatal("complete verification is not OK")
@@ -46,5 +48,12 @@ func TestAttachmentImportVerificationOK(t *testing.T) {
 	verified.Size = false
 	if verified.OK() {
 		t.Fatal("incomplete verification is OK")
+	}
+	encoded, err := json.Marshal(verified)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"actualFilename":"Example Paper.pdf"`) {
+		t.Fatalf("verification omitted actual filename: %s", encoded)
 	}
 }

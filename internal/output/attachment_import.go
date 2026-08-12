@@ -17,14 +17,15 @@ type AttachmentImport struct {
 
 // AttachmentImportVerification records focused post-registration invariants.
 type AttachmentImportVerification struct {
-	Parent         bool `json:"parent"`
-	ManagedStorage bool `json:"managedStorage"`
-	Title          bool `json:"title"`
-	SourceURL      bool `json:"sourceUrl"`
-	Filename       bool `json:"filename"`
-	ContentType    bool `json:"contentType"`
-	Size           bool `json:"size"`
-	Checksum       bool `json:"checksum"`
+	Parent         bool   `json:"parent"`
+	ManagedStorage bool   `json:"managedStorage"`
+	Title          bool   `json:"title"`
+	SourceURL      bool   `json:"sourceUrl"`
+	Filename       bool   `json:"filename"`
+	ContentType    bool   `json:"contentType"`
+	Size           bool   `json:"size"`
+	Checksum       bool   `json:"checksum"`
+	ActualFilename string `json:"actualFilename"`
 }
 
 // OK reports whether every managed-file invariant was verified.
