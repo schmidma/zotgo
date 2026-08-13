@@ -24,6 +24,13 @@ its default — with one exception, verified against Zotero, that an omitted `ta
 is *preserved* rather than cleared, so send `"tags": []` to strip them. Prefer
 `patch` unless you specifically want that reset behaviour.
 
+For stored and embedded Zotero-managed attachments, use `patch` only for
+non-storage metadata such as `title` or `contentType`. zotgo rejects `filename`,
+`path`, and `linkMode` patches because Zotero's current generic item update
+changes those storage fields without moving the managed file. Full `replace` is
+unavailable for managed attachments; file renaming and storage-mode changes need
+a dedicated supported operation.
+
 Item writes support stable machine output:
 
 ```bash

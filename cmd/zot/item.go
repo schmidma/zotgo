@@ -423,6 +423,9 @@ func itemPatchAction(ctx context.Context, cmd *cli.Command) error {
 		}
 		return friendly(err)
 	}
+	if err := validateItemPatchSafety(item, patch); err != nil {
+		return err
+	}
 
 	w := out(cmd)
 	fields := patchFields(patch)
@@ -523,6 +526,9 @@ func itemReplaceAction(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("no item with key %q in %s", key, lib.Name)
 		}
 		return friendly(err)
+	}
+	if err := validateItemReplaceSafety(item, full); err != nil {
+		return err
 	}
 
 	// Describe the item with the incoming object's type/title where present,
@@ -743,6 +749,67 @@ func parsePatchInput(raw []byte) (json.RawMessage, error) {
 		return nil, errors.New("the patch is empty")
 	}
 	return json.RawMessage(trimmed), nil
+}
+
+var attachmentStorageFields = []string{"filename", "linkMode", "path"}
+
+func validateItemPatchSafety(item zotero.Envelope, patch json.RawMessage) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(patch, &fields); err != nil {
+		return fmt.Errorf("decode patch fields: %w", err)
+	}
+	var changed []string
+	for _, field := range attachmentStorageFields {
+		if _, ok := fields[field]; ok {
+			changed = append(changed, field)
+		}
+	}
+	if len(changed) == 0 {
+		return nil
+	}
+	managed, err := managedAttachment(item)
+	if err != nil {
+		return err
+	}
+	if managed {
+		return fmt.Errorf("%s cannot be patched for a Zotero-managed attachment: generic item updates change storage metadata without moving the managed file", strings.Join(changed, ", "))
+	}
+	return nil
+}
+
+func validateItemReplaceSafety(item zotero.Envelope, _ json.RawMessage) error {
+	managed, err := managedAttachment(item)
+	if err != nil {
+		return err
+	}
+	if managed {
+		return errors.New("a Zotero-managed attachment cannot be fully replaced through the generic item command: use item patch for non-storage metadata fields")
+	}
+	return nil
+}
+
+func managedAttachment(item zotero.Envelope) (bool, error) {
+	var data struct {
+		ItemType string `json:"itemType"`
+		LinkMode string `json:"linkMode"`
+	}
+	if err := json.Unmarshal(item.Data, &data); err != nil {
+		return false, fmt.Errorf("inspect item before update: %w", err)
+	}
+	if data.ItemType == "" {
+		return false, errors.New("inspect item before update: response has no itemType")
+	}
+	if data.ItemType != "attachment" {
+		return false, nil
+	}
+	switch data.LinkMode {
+	case "imported_file", "imported_url", "embedded_image":
+		return true, nil
+	case "linked_file", "linked_url":
+		return false, nil
+	default:
+		return false, fmt.Errorf("inspect attachment before update: unknown linkMode %q", data.LinkMode)
+	}
 }
 
 // patchFields lists the field names a patch will set, in a stable order.

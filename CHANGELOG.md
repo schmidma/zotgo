@@ -27,6 +27,9 @@ Planned and outstanding work is tracked in the
 
 ### Changed
 
+- Generic item updates now protect stored and embedded attachments from unsafe
+  storage metadata changes: `patch` rejects `filename`, `path`, and `linkMode`,
+  and `replace` is unavailable for managed attachments.
 - `list` and `search` with `--limit 0 --jsonl` now stream results page by page
   instead of buffering the whole library before writing, so a very large library
   is no longer held in memory all at once. Successful output is unchanged; an
