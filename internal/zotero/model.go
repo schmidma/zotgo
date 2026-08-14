@@ -2,7 +2,10 @@ package zotero
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 )
 
 // versionNumber accepts the empty version emitted for untouched objects
@@ -60,6 +63,8 @@ type Library struct {
 type Link struct {
 	Href           string `json:"href"`
 	Type           string `json:"type"`
+	Title          string `json:"title,omitempty"`
+	Length         *int64 `json:"length,omitempty"`
 	AttachmentType string `json:"attachmentType"`
 	AttachmentSize int64  `json:"attachmentSize"`
 }
@@ -74,6 +79,43 @@ type ItemData struct {
 	Creators    []Creator `json:"creators"`
 	Tags        []Tag     `json:"tags"`
 	Collections []string  `json:"collections"`
+}
+
+// Attachment is the metadata Zotero exposes for one attachment item.
+// It contains no filesystem-derived state.
+type Attachment struct {
+	Key          string
+	ParentKey    string
+	Title        string
+	LinkMode     string
+	ContentType  string
+	Charset      string
+	Filename     string
+	URL          string
+	AccessDate   string
+	DateAdded    string
+	DateModified string
+	Tags         []Tag
+	MD5          *string
+	MTime        *int64
+	Enclosure    *Link
+}
+
+type attachmentData struct {
+	ItemType     string          `json:"itemType"`
+	ParentItem   json.RawMessage `json:"parentItem"`
+	Title        string          `json:"title"`
+	LinkMode     string          `json:"linkMode"`
+	ContentType  string          `json:"contentType"`
+	Charset      string          `json:"charset"`
+	Filename     string          `json:"filename"`
+	URL          string          `json:"url"`
+	AccessDate   string          `json:"accessDate"`
+	DateAdded    string          `json:"dateAdded"`
+	DateModified string          `json:"dateModified"`
+	Tags         []Tag           `json:"tags"`
+	MD5          json.RawMessage `json:"md5"`
+	MTime        json.RawMessage `json:"mtime"`
 }
 
 func (d *ItemData) UnmarshalJSON(data []byte) error {
@@ -116,6 +158,96 @@ func (e Envelope) ItemData() (ItemData, error) {
 	}
 	err := json.Unmarshal(e.Data, &data)
 	return data, err
+}
+
+// AttachmentData decodes and validates an attachment envelope.
+func (e Envelope) AttachmentData() (Attachment, error) {
+	if e.Key == "" {
+		return Attachment{}, errors.New("missing attachment key")
+	}
+	if len(e.Data) == 0 {
+		return Attachment{}, fmt.Errorf("attachment %s has no data", e.Key)
+	}
+	var data attachmentData
+	if err := json.Unmarshal(e.Data, &data); err != nil {
+		return Attachment{}, fmt.Errorf("attachment %s: %w", e.Key, err)
+	}
+	if data.ItemType != "attachment" {
+		return Attachment{}, fmt.Errorf("item %s has type %q, not attachment", e.Key, data.ItemType)
+	}
+	parentKey, err := attachmentParentKey(data.ParentItem)
+	if err != nil {
+		return Attachment{}, fmt.Errorf("attachment %s parentItem: %w", e.Key, err)
+	}
+	md5, err := nullableString(data.MD5)
+	if err != nil {
+		return Attachment{}, fmt.Errorf("attachment %s md5: %w", e.Key, err)
+	}
+	mtime, err := nullableInt64(data.MTime)
+	if err != nil {
+		return Attachment{}, fmt.Errorf("attachment %s mtime: %w", e.Key, err)
+	}
+	tags := data.Tags
+	if tags == nil {
+		tags = []Tag{}
+	}
+	var enclosure *Link
+	if link, ok := e.Links["enclosure"]; ok {
+		enclosure = &link
+	}
+	return Attachment{
+		Key:          e.Key,
+		ParentKey:    parentKey,
+		Title:        data.Title,
+		LinkMode:     data.LinkMode,
+		ContentType:  data.ContentType,
+		Charset:      data.Charset,
+		Filename:     data.Filename,
+		URL:          data.URL,
+		AccessDate:   data.AccessDate,
+		DateAdded:    data.DateAdded,
+		DateModified: data.DateModified,
+		Tags:         tags,
+		MD5:          md5,
+		MTime:        mtime,
+		Enclosure:    enclosure,
+	}, nil
+}
+
+func attachmentParentKey(raw json.RawMessage) (string, error) {
+	switch strings.TrimSpace(string(raw)) {
+	case "", "null", "false":
+		return "", nil
+	}
+	var key string
+	if err := json.Unmarshal(raw, &key); err != nil {
+		return "", err
+	}
+	return key, nil
+}
+
+func nullableString(raw json.RawMessage) (*string, error) {
+	switch strings.TrimSpace(string(raw)) {
+	case "", "null":
+		return nil, nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, err
+	}
+	return &value, nil
+}
+
+func nullableInt64(raw json.RawMessage) (*int64, error) {
+	switch strings.TrimSpace(string(raw)) {
+	case "", "null":
+		return nil, nil
+	}
+	var value int64
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, err
+	}
+	return &value, nil
 }
 
 // CollectionData decodes e.Data as Zotero collection JSON.
